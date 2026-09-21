@@ -1,0 +1,218 @@
+/* Apex Screen Recorder - Modern Dark Glassmorphic Design System */
+
+QWidget {
+    background-color: #0D0E12;
+    color: #F9FAFB;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    font-size: 13px;
+    selection-background-color: #6366F1;
+    selection-color: #FFFFFF;
+}
+
+/* Card Containers */
+QFrame.Card {
+    background-color: #161820;
+    border: 1px solid #2D313F;
+    border-radius: 12px;
+}
+
+QFrame.Card:hover {
+    border-color: #3F4458;
+}
+
+/* Mode Selection Toggle Buttons */
+QPushButton.ModeBtn {
+    background-color: #161820;
+    color: #9CA3AF;
+    border: 1px solid #2D313F;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QPushButton.ModeBtn:hover {
+    background-color: #20232E;
+    color: #F9FAFB;
+    border-color: #4F46E5;
+}
+
+QPushButton.ModeBtn:checked {
+    background-color: #20232E;
+    color: #FFFFFF;
+    border: 2px solid #6366F1;
+}
+
+/* Big Red Start Record Button */
+QPushButton#BtnStartRecord {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #EF4444, stop:1 #DC2626);
+    color: #FFFFFF;
+    font-size: 15px;
+    font-weight: bold;
+    border: none;
+    border-radius: 24px;
+    padding: 12px 32px;
+    min-height: 48px;
+}
+
+QPushButton#BtnStartRecord:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #F87171, stop:1 #EF4444);
+}
+
+QPushButton#BtnStartRecord:pressed {
+    background-color: #B91C1C;
+}
+
+/* Standard Secondary Buttons */
+QPushButton {
+    background-color: #20232E;
+    color: #F3F4F6;
+    border: 1px solid #2D313F;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-weight: 500;
+}
+
+QPushButton:hover {
+    background-color: #2B2F3D;
+    border-color: #6366F1;
+}
+
+QPushButton:pressed {
+    background-color: #1A1C24;
+}
+
+QPushButton:disabled {
+    background-color: #13141B;
+    color: #4B5563;
+    border-color: #1F222B;
+}
+
+/* Dropdown ComboBoxes */
+QComboBox {
+    background-color: #161820;
+    color: #F9FAFB;
+    border: 1px solid #2D313F;
+    border-radius: 8px;
+    padding: 6px 12px;
+    min-height: 28px;
+}
+
+QComboBox:hover {
+    border-color: #4F46E5;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 24px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1C1E24;
+    color: #F9FAFB;
+    border: 1px solid #2D313F;
+    selection-background-color: #6366F1;
+    border-radius: 6px;
+    padding: 4px;
+}
+
+/* Checkboxes */
+QCheckBox {
+    color: #F3F4F6;
+    font-weight: 500;
+    spacing: 8px;
+}
+
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border: 1px solid #3F4458;
+    border-radius: 4px;
+    background-color: #161820;
+}
+
+QCheckBox::indicator:hover {
+    border-color: #6366F1;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #6366F1;
+    border-color: #6366F1;
+    image: none;
+}
+
+/* Sliders */
+QSlider::groove:horizontal {
+    height: 6px;
+    background: #2D313F;
+    border-radius: 3px;
+}
+
+QSlider::sub-page:horizontal {
+    background: #6366F1;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: #FFFFFF;
+    border: 2px solid #6366F1;
+    width: 14px;
+    height: 14px;
+    margin: -4px 0;
+    border-radius: 7px;
+}
+
+/* Progress / Level Bars (VU Meters) */
+QProgressBar {
+    background-color: #20232E;
+    border: 1px solid #2D313F;
+    border-radius: 4px;
+    height: 6px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10B981, stop:0.7 #F59E0B, stop:1 #EF4444);
+    border-radius: 3px;
+}
+
+/* List Widget (Recent Recordings) */
+QListWidget {
+    background-color: #13141B;
+    border: 1px solid #2D313F;
+    border-radius: 8px;
+    padding: 4px;
+}
+
+QListWidget::item {
+    background-color: #161820;
+    border-radius: 6px;
+    margin: 3px 0;
+    padding: 8px;
+}
+
+QListWidget::item:hover {
+    background-color: #20232E;
+    border: 1px solid #3F4458;
+}
+
+/* Scrollbars */
+QScrollBar:vertical {
+    background-color: #0D0E12;
+    width: 8px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #2D313F;
+    border-radius: 4px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #4F46E5;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}

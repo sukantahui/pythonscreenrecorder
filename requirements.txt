@@ -1,0 +1,33 @@
+# ==============================================================================
+# GUI Python Screen Recorder - Dependencies
+# ==============================================================================
+
+# GUI Framework & UI Components
+PyQt6>=6.6.0
+qtawesome>=1.3.0
+
+# Screen & Window Capture
+mss>=9.0.1
+dxcam>=0.1.2; platform_system == "Windows"
+pywin32>=306; platform_system == "Windows"
+pygetwindow>=0.0.9
+
+# Audio Capture (System Loopback + Microphone)
+sounddevice>=0.4.6
+numpy>=1.24.0
+
+# Video & Image Processing / Webcam / Annotations
+opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# Input Hooking & Global Hotkeys
+pynput>=1.7.6
+keyboard>=0.13.5
+
+# High-Performance Video/Audio Encoding & Muxing
+PyAV>=11.0.0
+imageio-ffmpeg>=0.4.9
+
+# System Utilities & Packaging
+psutil>=5.9.0
+pyinstaller>=6.3.0

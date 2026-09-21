@@ -1,0 +1,418 @@
+"""
+Primary Dashboard and Main Application Window.
+"""
+
+import os
+import glob
+from typing import Optional, Dict, Any
+from PyQt6.QtCore import Qt, QTimer, pyqtSlot
+from PyQt6.QtGui import QIcon, QFont, QColor
+from PyQt6.QtWidgets import (
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QFrame,
+    QProgressBar,
+    QComboBox,
+    QSlider,
+    QCheckBox,
+    QListWidget,
+    QListWidgetItem,
+    QButtonGroup,
+    QMessageBox,
+    QApplication,
+)
+
+from src.config.constants import (
+    APP_NAME,
+    APP_VERSION,
+    MODE_FULLSCREEN,
+    MODE_REGION,
+    MODE_WINDOW,
+    DEFAULT_OUTPUT_DIR,
+    COLOR_ACCENT,
+    COLOR_DANGER,
+)
+from src.config.settings_manager import settings
+from src.core.controller import controller
+from src.core.audio_capture import AudioCaptureWorker
+from src.overlays.region_selector import RegionSelectorOverlay
+from src.overlays.annotation_canvas import AnnotationCanvas
+from src.overlays.webcam_pip import WebcamPiPOverlay
+from src.overlays.cursor_effects import CursorEffectsOverlay
+from src.overlays.keystroke_hud import KeystrokeHUDOverlay
+from src.ui.floating_bar import FloatingBar
+from src.ui.settings_dialog import SettingsDialog
+from src.ui.preview_dialog import PreviewDialog
+from src.services.hotkey_service import hotkey_service
+from src.services.tray_service import TrayService
+from src.services.post_processor import post_processor
+
+
+class MainWindow(QMainWindow):
+    """Main dashboard window."""
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
+        self.setFixedSize(760, 680)
+
+        self.selected_mode = MODE_FULLSCREEN
+        self.selected_region: Optional[Dict[str, int]] = None
+
+        # Overlays & Toolbars
+        self.region_selector = RegionSelectorOverlay()
+        self.annotation_canvas = AnnotationCanvas()
+        self.webcam_overlay: Optional[WebcamPiPOverlay] = None
+        self.cursor_effects = CursorEffectsOverlay()
+        self.keystroke_hud = KeystrokeHUDOverlay()
+        self.floating_bar = FloatingBar()
+        self.tray_service = TrayService(self)
+
+        self._setup_ui()
+        self._connect_signals()
+        self._refresh_recent_recordings()
+
+        # Start background services
+        hotkey_service.start(settings.get("hotkeys"))
+        self.tray_service.show()
+
+    def _setup_ui(self):
+        central_widget = QWidget(self)
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(16)
+
+        # 1. Header Bar
+        header_layout = QHBoxLayout()
+        lbl_logo = QLabel(f"🔴 {APP_NAME.upper()}")
+        lbl_logo.setStyleSheet("font-size: 16px; font-weight: bold; color: #F9FAFB; letter-spacing: 1px;")
+        header_layout.addWidget(lbl_logo)
+
+        self.lbl_status = QLabel("● Ready")
+        self.lbl_status.setStyleSheet("color: #10B981; font-weight: 600; font-size: 12px; margin-left: 8px;")
+        header_layout.addWidget(self.lbl_status)
+        header_layout.addStretch()
+
+        btn_folder = QPushButton("📁 Recordings")
+        btn_folder.clicked.connect(lambda: post_processor.open_folder(settings.get("output_dir", DEFAULT_OUTPUT_DIR)))
+        header_layout.addWidget(btn_folder)
+
+        btn_settings = QPushButton("⚙️ Settings")
+        btn_settings.clicked.connect(self._open_settings)
+        header_layout.addWidget(btn_settings)
+
+        main_layout.addLayout(header_layout)
+
+        # 2. Capture Mode Selector
+        mode_card = QFrame(self)
+        mode_card.setProperty("class", "Card")
+        mode_layout = QHBoxLayout(mode_card)
+        mode_layout.setContentsMargins(12, 12, 12, 12)
+        mode_layout.setSpacing(12)
+
+        self.mode_group = QButtonGroup(self)
+
+        self.btn_mode_full = QPushButton("🖥️ Full Screen")
+        self.btn_mode_full.setProperty("class", "ModeBtn")
+        self.btn_mode_full.setCheckable(True)
+        self.btn_mode_full.setChecked(True)
+        self.btn_mode_full.clicked.connect(lambda: self._set_mode(MODE_FULLSCREEN))
+        self.mode_group.addButton(self.btn_mode_full)
+        mode_layout.addWidget(self.btn_mode_full)
+
+        self.btn_mode_region = QPushButton("🔲 Custom Region")
+        self.btn_mode_region.setProperty("class", "ModeBtn")
+        self.btn_mode_region.setCheckable(True)
+        self.btn_mode_region.clicked.connect(lambda: self._set_mode(MODE_REGION))
+        self.mode_group.addButton(self.btn_mode_region)
+        mode_layout.addWidget(self.btn_mode_region)
+
+        main_layout.addWidget(mode_card)
+
+        # 3. Audio & Webcam Devices Quick Cards Row
+        devices_row = QHBoxLayout()
+        devices_row.setSpacing(12)
+
+        # System Audio Card
+        self.card_sys = QFrame(self)
+        self.card_sys.setProperty("class", "Card")
+        sys_layout = QVBoxLayout(self.card_sys)
+        sys_layout.setContentsMargins(12, 12, 12, 12)
+        self.chk_sys = QCheckBox("🔊 System Audio")
+        self.chk_sys.setChecked(settings.get("record_system_audio", True))
+        self.chk_sys.toggled.connect(lambda c: settings.set("record_system_audio", c))
+        sys_layout.addWidget(self.chk_sys)
+
+        self.vu_sys = QProgressBar()
+        self.vu_sys.setRange(0, 100)
+        self.vu_sys.setValue(0)
+        self.vu_sys.setTextVisible(False)
+        sys_layout.addWidget(self.vu_sys)
+        devices_row.addWidget(self.card_sys)
+
+        # Microphone Card
+        self.card_mic = QFrame(self)
+        self.card_mic.setProperty("class", "Card")
+        mic_layout = QVBoxLayout(self.card_mic)
+        mic_layout.setContentsMargins(12, 12, 12, 12)
+        self.chk_mic = QCheckBox("🎙️ Microphone")
+        self.chk_mic.setChecked(settings.get("record_microphone", False))
+        self.chk_mic.toggled.connect(lambda c: settings.set("record_microphone", c))
+        mic_layout.addWidget(self.chk_mic)
+
+        self.vu_mic = QProgressBar()
+        self.vu_mic.setRange(0, 100)
+        self.vu_mic.setValue(0)
+        self.vu_mic.setTextVisible(False)
+        mic_layout.addWidget(self.vu_mic)
+        devices_row.addWidget(self.card_mic)
+
+        # Webcam Card
+        self.card_cam = QFrame(self)
+        self.card_cam.setProperty("class", "Card")
+        cam_layout = QVBoxLayout(self.card_cam)
+        cam_layout.setContentsMargins(12, 12, 12, 12)
+        self.chk_cam = QCheckBox("📷 Webcam PiP")
+        self.chk_cam.setChecked(settings.get("webcam_enabled", False))
+        self.chk_cam.toggled.connect(lambda c: settings.set("webcam_enabled", c))
+        cam_layout.addWidget(self.chk_cam)
+
+        self.combo_cam_shape = QComboBox()
+        self.combo_cam_shape.addItems(["Circle PiP", "Rounded PiP", "Rect PiP"])
+        cam_layout.addWidget(self.combo_cam_shape)
+        devices_row.addWidget(self.card_cam)
+
+        main_layout.addLayout(devices_row)
+
+        # 4. Quality & FPS Quick Info Bar
+        info_row = QHBoxLayout()
+        lbl_q = QLabel(f"Quality: <b>{settings.get('quality_profile', 'High (10 Mbps)')}</b> | FPS: <b>{settings.get('fps', 60)}</b> | Codec: <b>{settings.get('encoder', 'auto').upper()}</b>")
+        lbl_q.setStyleSheet("color: #9CA3AF; font-size: 12px;")
+        info_row.addWidget(lbl_q)
+        info_row.addStretch()
+        main_layout.addLayout(info_row)
+
+        # 5. Primary Start Record Button
+        self.btn_record = QPushButton("● START RECORDING (F9)")
+        self.btn_record.setObjectName("BtnStartRecord")
+        self.btn_record.clicked.connect(self._toggle_recording)
+        main_layout.addWidget(self.btn_record)
+
+        # 6. Recent Recordings List
+        lbl_recent = QLabel("Recent Recordings")
+        lbl_recent.setStyleSheet("font-size: 14px; font-weight: bold; color: #F9FAFB; margin-top: 6px;")
+        main_layout.addWidget(lbl_recent)
+
+        self.list_recent = QListWidget(self)
+        self.list_recent.itemDoubleClicked.connect(self._on_recent_item_double_clicked)
+        main_layout.addWidget(self.list_recent)
+
+    def _connect_signals(self):
+        # Controller Signals
+        controller.state_changed.connect(self._on_state_changed)
+        controller.time_updated.connect(self.floating_bar.update_time)
+        controller.fps_updated.connect(self.floating_bar.update_fps)
+        controller.audio_levels_updated.connect(self._on_audio_levels)
+        controller.recording_finished.connect(self._on_recording_finished)
+        controller.error_occurred.connect(self._on_error)
+
+        # Region Selector
+        self.region_selector.region_selected.connect(self._on_region_selected)
+        self.region_selector.cancelled.connect(lambda: self._set_mode(MODE_FULLSCREEN))
+
+        # Floating Toolbar Signals
+        self.floating_bar.pause_clicked.connect(controller.pause_recording)
+        self.floating_bar.resume_clicked.connect(controller.resume_recording)
+        self.floating_bar.stop_clicked.connect(controller.stop_recording)
+        self.floating_bar.annotate_clicked.connect(self._toggle_annotations)
+        self.floating_bar.screenshot_clicked.connect(self._take_screenshot)
+        self.floating_bar.restore_main_clicked.connect(self._restore_main_window)
+
+        # Hotkeys
+        hotkey_service.record_stop_triggered.connect(self._toggle_recording)
+        hotkey_service.pause_resume_triggered.connect(self._toggle_pause)
+        hotkey_service.annotate_triggered.connect(self._toggle_annotations)
+        hotkey_service.screenshot_triggered.connect(self._take_screenshot)
+
+        # Tray
+        self.tray_service.show_requested.connect(self._restore_main_window)
+        self.tray_service.record_requested.connect(self._toggle_recording)
+        self.tray_service.pause_requested.connect(self._toggle_pause)
+        self.tray_service.stop_requested.connect(controller.stop_recording)
+        self.tray_service.open_folder_requested.connect(lambda: post_processor.open_folder(settings.get("output_dir")))
+        self.tray_service.settings_requested.connect(self._open_settings)
+        self.tray_service.exit_requested.connect(QApplication.instance().quit)
+
+    def _set_mode(self, mode: str):
+        self.selected_mode = mode
+        if mode == MODE_REGION:
+            self.region_selector.show()
+        else:
+            self.selected_region = None
+
+    def _on_region_selected(self, region: dict):
+        self.selected_region = region
+        self.lbl_status.setText(f"● Region: {region['width']}x{region['height']}")
+
+    def _toggle_recording(self):
+        if controller.state == "idle":
+            self._start_recording_flow()
+        elif controller.state in ["recording", "paused"]:
+            controller.stop_recording()
+
+    def _toggle_pause(self):
+        if controller.state == "recording":
+            controller.pause_recording()
+        elif controller.state == "paused":
+            controller.resume_recording()
+
+    def _start_recording_flow(self):
+        if self.selected_mode == MODE_REGION and not self.selected_region:
+            self.region_selector.show()
+            return
+
+        # Start creative overlays
+        if settings.get("highlight_clicks", True):
+            self.cursor_effects.start()
+        if settings.get("show_keystrokes", False):
+            self.keystroke_hud.start()
+
+        if self.chk_cam.isChecked():
+            shape_idx = self.combo_cam_shape.currentIndex()
+            shapes = ["circle", "rounded", "rect"]
+            self.webcam_overlay = WebcamPiPOverlay(
+                device_id=settings.get("webcam_device_id", 0),
+                shape=shapes[shape_idx],
+            )
+            self.webcam_overlay.start_webcam()
+
+        # Start controller
+        if controller.start_recording(region=self.selected_region):
+            if settings.get("minimize_to_tray_on_record", True):
+                self.hide()
+            self.floating_bar.show()
+            self.tray_service.set_recording_state(True)
+            self.tray_service.show_notification(APP_NAME, "Recording started!")
+
+    def _on_state_changed(self, state: str):
+        if state == "recording":
+            self.lbl_status.setText("● Recording")
+            self.lbl_status.setStyleSheet("color: #EF4444; font-weight: bold;")
+            self.btn_record.setText("⏹ STOP RECORDING (F9)")
+            self.btn_record.setStyleSheet("background-color: #EF4444; border-radius: 24px;")
+            self.floating_bar.set_paused_state(False)
+            self.tray_service.set_recording_state(True, is_paused=False)
+        elif state == "paused":
+            self.lbl_status.setText("⏸ Paused")
+            self.lbl_status.setStyleSheet("color: #F59E0B; font-weight: bold;")
+            self.btn_record.setText("▶ RESUME RECORDING (F10)")
+            self.floating_bar.set_paused_state(True)
+            self.tray_service.set_recording_state(True, is_paused=True)
+        elif state in ["idle", "finalizing"]:
+            self.lbl_status.setText("● Ready")
+            self.lbl_status.setStyleSheet("color: #10B981; font-weight: bold;")
+            self.btn_record.setText("● START RECORDING (F9)")
+            self.btn_record.setStyleSheet("")
+            self.floating_bar.hide()
+            self.annotation_canvas.hide()
+            self.cursor_effects.stop()
+            self.keystroke_hud.stop()
+            if self.webcam_overlay:
+                self.webcam_overlay.stop()
+                self.webcam_overlay = None
+            self.tray_service.set_recording_state(False)
+
+    def _on_audio_levels(self, sys_lvl: float, mic_lvl: float):
+        self.vu_sys.setValue(int(sys_lvl * 100))
+        self.vu_mic.setValue(int(mic_lvl * 100))
+
+    def _on_recording_finished(self, filepath: str):
+        self._refresh_recent_recordings()
+        self.tray_service.show_notification(APP_NAME, f"Saved: {os.path.basename(filepath)}")
+        self._restore_main_window()
+
+        # Open post-recording preview dialog
+        dlg = PreviewDialog(filepath, self)
+        dlg.exec()
+
+    def _on_error(self, err: str):
+        QMessageBox.critical(self, "Recording Error", err)
+
+    def _toggle_annotations(self):
+        if self.annotation_canvas.isVisible():
+            self.annotation_canvas.hide()
+        else:
+            self.annotation_canvas.show()
+
+    def _take_screenshot(self):
+        import mss
+        from PIL import Image
+        from datetime import datetime
+
+        output_dir = settings.get("output_dir", DEFAULT_OUTPUT_DIR)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filepath = os.path.join(output_dir, f"Screenshot_{timestamp}.png")
+
+        with mss.MSS() as sct:
+            mon = sct.monitors[1] if len(sct.monitors) > 1 else sct.monitors[0]
+            img = sct.grab(mon)
+            pil_img = Image.frombytes("RGB", img.size, img.bgra, "raw", "BGRX")
+            pil_img.save(filepath)
+
+        self.tray_service.show_notification("Screenshot Captured", f"Saved to {os.path.basename(filepath)}")
+        self._refresh_recent_recordings()
+
+    def _restore_main_window(self):
+        self.show()
+        self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized | Qt.WindowState.WindowActive)
+        self.activateWindow()
+
+    def _open_settings(self):
+        dlg = SettingsDialog(self)
+        if dlg.exec():
+            hotkey_service.start(settings.get("hotkeys"))
+
+    def _refresh_recent_recordings(self):
+        self.list_recent.clear()
+        output_dir = settings.get("output_dir", DEFAULT_OUTPUT_DIR)
+        if not os.path.exists(output_dir):
+            return
+
+        files = glob.glob(os.path.join(output_dir, "*.*"))
+        video_files = [f for f in files if f.lower().endswith((".mp4", ".mkv", ".webm", ".gif", ".png"))]
+        video_files.sort(key=os.path.getmtime, reverse=True)
+
+        for vf in video_files[:10]:
+            size_mb = os.path.getsize(vf) / (1024 * 1024)
+            name = os.path.basename(vf)
+            icon = "🎬" if vf.lower().endswith((".mp4", ".mkv", ".webm")) else ("🎞️" if vf.lower().endswith(".gif") else "📸")
+            item = QListWidgetItem(f"{icon}  {name}  ({size_mb:.2f} MB)")
+            item.setData(Qt.ItemDataRole.UserRole, vf)
+            self.list_recent.addItem(item)
+
+    def _on_recent_item_double_clicked(self, item: QListWidgetItem):
+        path = item.data(Qt.ItemDataRole.UserRole)
+        if path and os.path.exists(path):
+            if path.lower().endswith((".mp4", ".mkv", ".webm")):
+                dlg = PreviewDialog(path, self)
+                dlg.exec()
+            else:
+                post_processor.open_folder(os.path.dirname(path))
+
+    def closeEvent(self, event):
+        if controller.state in ["recording", "paused"]:
+            ret = QMessageBox.question(
+                self,
+                "Recording in Progress",
+                "Recording is active. Do you want to stop and save before closing?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if ret == QMessageBox.StandardButton.Yes:
+                controller.stop_recording()
+        hotkey_service.stop()
+        super().closeEvent(event)

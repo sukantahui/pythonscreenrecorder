@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# User configurations & temporary capture files
+.apex_screen_recorder/
+.temp/
+tests/test_output/
+
+# Captured media files
+*.mp4
+*.mkv
+*.webm
+*.avi
+*.mov
+*.wav
+*.mp3
+*.gif
+*.png
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
