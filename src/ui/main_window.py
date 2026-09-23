@@ -519,16 +519,18 @@ class MainWindow(QMainWindow):
             self.chk_mic.setChecked(settings.get("record_microphone", True) and len(mics) > 0)
             self.chk_mic.blockSignals(False)
 
-        # Auto-match webcam audio device ID
+        # Auto-match webcam audio device ID for when user decides to enable it
         cam_name = self.combo_cam_dev.currentText() if hasattr(self, "combo_cam_dev") else "Iriun Webcam"
         webcam_mic_id = AudioCaptureWorker.match_webcam_audio(cam_name)
         if webcam_mic_id is not None:
             settings.set("webcam_audio_device_id", webcam_mic_id)
-            settings.set("record_webcam_audio", True)
-            if hasattr(self, "chk_cam_audio"):
-                self.chk_cam_audio.blockSignals(True)
-                self.chk_cam_audio.setChecked(True)
-                self.chk_cam_audio.blockSignals(False)
+
+        # Webcam audio is unchecked by default
+        rec_cam_audio = settings.get("record_webcam_audio", False)
+        if hasattr(self, "chk_cam_audio"):
+            self.chk_cam_audio.blockSignals(True)
+            self.chk_cam_audio.setChecked(rec_cam_audio)
+            self.chk_cam_audio.blockSignals(False)
 
         self.combo_mic_source.blockSignals(False)
 
