@@ -302,6 +302,11 @@ You can change the output folder anytime in the **Settings** panel of the applic
 
 ---
 
-## 📄 License
+## 📄 License & Terms of Use
 
-This project is licensed under the **MIT License**. Feel free to use, modify, and distribute it for personal, commercial, and educational purposes.
+This software is developed and published by **Coder & AccoTax (CNAT)**.
+
+- **Copyright**: © 2026 **Coder & AccoTax (CNAT)**. All rights reserved.
+- **Lead Developer**: **Sukanta Hui**
+- **License Type**: **Coder & AccoTax (CNAT) Proprietary & Commercial Software License**
+- **Terms**: Authorized for use, deployment, and distribution according to Coder & AccoTax (CNAT) terms. For inquiries or enterprise licensing, visit [www.codernaccotax.co.in](https://www.codernaccotax.co.in) or call `+91 7003756860`.

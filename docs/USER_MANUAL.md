@@ -256,6 +256,6 @@ You can change the output directory anytime via the **Settings (⚙️)** panel.
 - **Official Website**: [https://www.codernaccotax.co.in](https://www.codernaccotax.co.in)
 - **Helpline / WhatsApp**: `+91 7003756860` / `7003756860`
 - **GitHub Repository**: [https://github.com/sukantahui/pythonscreenrecorder](https://github.com/sukantahui/pythonscreenrecorder)
-- **License**: MIT License. Free for commercial, personal, and educational use.
+- **License**: **Coder & AccoTax (CNAT) Software License**. Copyright © 2026 Coder & AccoTax (CNAT). All rights reserved.
 
 *(Generated and verified on September 24, 2026)*
