@@ -39,6 +39,7 @@ class SettingsManager:
         "record_webcam_audio": False,
         "webcam_audio_device_id": None,
         "webcam_audio_volume": 100,
+        "noise_reduction": 0,
         "webcam_enabled": False,
         "webcam_device_id": 0,
         "webcam_device_name": "",

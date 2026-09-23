@@ -205,6 +205,27 @@ class MainWindow(QMainWindow):
         self.vu_mic.setValue(0)
         self.vu_mic.setTextVisible(False)
         mic_layout.addWidget(self.vu_mic)
+
+        # Noise Reduction Slider
+        noise_row = QHBoxLayout()
+        lbl_noise_title = QLabel("🔇 Noise Reduction:")
+        lbl_noise_title.setStyleSheet("font-size: 11px; color: #8e8ea0;")
+        self.lbl_noise_val = QLabel("Off")
+        self.lbl_noise_val.setStyleSheet("font-size: 11px; color: #8e8ea0; font-weight: bold;")
+        noise_row.addWidget(lbl_noise_title)
+        noise_row.addStretch()
+        noise_row.addWidget(self.lbl_noise_val)
+        mic_layout.addLayout(noise_row)
+
+        self.slider_noise = QSlider(Qt.Orientation.Horizontal)
+        self.slider_noise.setRange(0, 100)
+        curr_noise = int(settings.get("noise_reduction", 0))
+        self.slider_noise.setValue(curr_noise)
+        self.slider_noise.setToolTip("Filter out background hum, fan hiss, and room noise in real-time (0% = Off)")
+        self.slider_noise.valueChanged.connect(self._on_noise_reduction_changed)
+        mic_layout.addWidget(self.slider_noise)
+        self._update_noise_label(curr_noise)
+
         devices_row.addWidget(self.card_mic)
 
         # Webcam Card
@@ -399,6 +420,25 @@ class MainWindow(QMainWindow):
     def _on_mic_source_changed(self, index: int):
         dev_id = self.combo_mic_source.currentData()
         settings.set("mic_device_id", dev_id)
+
+    def _on_noise_reduction_changed(self, value: int):
+        self._update_noise_label(value)
+        settings.set("noise_reduction", value)
+        self.controller.set_noise_reduction(value)
+
+    def _update_noise_label(self, value: int):
+        if value <= 0:
+            self.lbl_noise_val.setText("Off")
+            self.lbl_noise_val.setStyleSheet("font-size: 11px; color: #8e8ea0; font-weight: bold;")
+        elif value <= 35:
+            self.lbl_noise_val.setText(f"{value}% (Low)")
+            self.lbl_noise_val.setStyleSheet("font-size: 11px; color: #4ade80; font-weight: bold;")
+        elif value <= 70:
+            self.lbl_noise_val.setText(f"{value}% (Balanced)")
+            self.lbl_noise_val.setStyleSheet("font-size: 11px; color: #00ADB5; font-weight: bold;")
+        else:
+            self.lbl_noise_val.setText(f"{value}% (High)")
+            self.lbl_noise_val.setStyleSheet("font-size: 11px; color: #f59e0b; font-weight: bold;")
 
     def _on_webcam_audio_toggled(self, checked: bool):
         settings.set("record_webcam_audio", checked)
@@ -672,6 +712,11 @@ class MainWindow(QMainWindow):
             self.combo_main_quality.setCurrentText(settings.get("quality_profile", DEFAULT_QUALITY))
             self.combo_main_quality.blockSignals(False)
             self.lbl_fps_info.setText(f"⚡ {settings.get('fps', 60)} FPS")
+            noise_val = int(settings.get("noise_reduction", 0))
+            self.slider_noise.blockSignals(True)
+            self.slider_noise.setValue(noise_val)
+            self.slider_noise.blockSignals(False)
+            self._update_noise_label(noise_val)
 
     def _open_shortcuts(self):
         """Open the Keyboard Shortcuts Reference Dialog."""

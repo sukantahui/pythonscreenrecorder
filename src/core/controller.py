@@ -129,6 +129,7 @@ class RecordingController(QObject):
                 system_volume=settings.get("system_audio_volume", 100) / 100.0,
                 mic_volume=settings.get("mic_volume", 100) / 100.0,
                 webcam_volume=settings.get("webcam_audio_volume", 100) / 100.0,
+                noise_reduction=settings.get("noise_reduction", 0) / 100.0,
                 level_callback=lambda sys_lvl, mic_lvl: self.audio_levels_updated.emit(sys_lvl, mic_lvl),
             )
             # Start background audio writer to write WAV temp file
@@ -245,6 +246,11 @@ class RecordingController(QObject):
                 self.audio_worker.resume()
             self.state = "recording"
             self.state_changed.emit(self.state)
+
+    def set_noise_reduction(self, level: int):
+        """Update noise reduction level in real-time (0 to 100)."""
+        if self.audio_worker:
+            self.audio_worker.set_noise_reduction(level / 100.0)
 
     def stop_recording(self):
         """Stop capture, drain queues, close FFmpeg, and finalize file."""

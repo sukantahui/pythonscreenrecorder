@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, Any, Callable
 import numpy as np
 import sounddevice as sd
 from src.config.constants import AUDIO_SAMPLE_RATE, AUDIO_CHANNELS, AUDIO_CHUNK_SIZE
+from src.core.noise_reducer import RealtimeNoiseReducer
 
 
 class AudioCaptureWorker:
@@ -26,6 +27,7 @@ class AudioCaptureWorker:
         system_volume: float = 1.0,
         mic_volume: float = 1.0,
         webcam_volume: float = 1.0,
+        noise_reduction: float = 0.0,
         level_callback: Optional[Callable[[float, float], None]] = None,
     ):
         self.audio_queue = audio_queue
@@ -37,7 +39,11 @@ class AudioCaptureWorker:
         self.system_volume = system_volume
         self.mic_volume = mic_volume
         self.webcam_volume = webcam_volume
+        self.noise_reduction = noise_reduction
         self.level_callback = level_callback
+
+        self._mic_noise_reducer = RealtimeNoiseReducer(sample_rate=AUDIO_SAMPLE_RATE, strength=self.noise_reduction)
+        self._cam_noise_reducer = RealtimeNoiseReducer(sample_rate=AUDIO_SAMPLE_RATE, strength=self.noise_reduction)
 
         self._running = False
         self._paused = False
@@ -202,13 +208,20 @@ class AudioCaptureWorker:
         except queue.Full:
             pass
 
+    def set_noise_reduction(self, strength: float):
+        """Update noise reduction strength in real-time (0.0 to 1.0)."""
+        self.noise_reduction = float(strength)
+        self._mic_noise_reducer.set_strength(self.noise_reduction)
+        self._cam_noise_reducer.set_strength(self.noise_reduction)
+
     def _mic_audio_callback(self, indata, frames, time_info, status):
         if self._paused:
             return
-        rms = np.sqrt(np.mean(indata**2)) if len(indata) > 0 else 0.0
+        processed = self._mic_noise_reducer.process(indata)
+        rms = np.sqrt(np.mean(processed**2)) if len(processed) > 0 else 0.0
         self._latest_mic_level = min(float(rms * 4.0), 1.0)
 
-        scaled = indata * self.mic_volume
+        scaled = processed * self.mic_volume
         try:
             self._mic_chunk_queue.put_nowait(scaled.copy())
         except queue.Full:
@@ -217,10 +230,11 @@ class AudioCaptureWorker:
     def _webcam_audio_callback(self, indata, frames, time_info, status):
         if self._paused:
             return
-        rms = np.sqrt(np.mean(indata**2)) if len(indata) > 0 else 0.0
+        processed = self._cam_noise_reducer.process(indata)
+        rms = np.sqrt(np.mean(processed**2)) if len(processed) > 0 else 0.0
         self._latest_webcam_level = min(float(rms * 4.0), 1.0)
 
-        scaled = indata * self.webcam_volume
+        scaled = processed * self.webcam_volume
         try:
             self._cam_chunk_queue.put_nowait(scaled.copy())
         except queue.Full:

@@ -220,7 +220,45 @@ class SettingsDialog(QDialog):
         cam_audio_form.addRow("Webcam Volume:", self.slider_webcam_vol)
         layout.addWidget(grp_cam_audio)
 
+        # Noise Suppression / Reduction
+        grp_noise = QGroupBox("Noise Reduction & Audio Filters")
+        noise_form = QFormLayout(grp_noise)
+
+        noise_row = QHBoxLayout()
+        self.slider_noise_reduction = QSlider(Qt.Orientation.Horizontal)
+        self.slider_noise_reduction.setRange(0, 100)
+        self.slider_noise_reduction.setValue(0)
+        self.lbl_noise_val = QLabel("Off (0%)")
+        self.lbl_noise_val.setStyleSheet("font-weight: bold; color: #8e8ea0; min-width: 100px;")
+        self.slider_noise_reduction.valueChanged.connect(self._on_noise_slider_changed)
+
+        noise_row.addWidget(self.slider_noise_reduction, 1)
+        noise_row.addWidget(self.lbl_noise_val)
+        noise_form.addRow("Noise Suppression:", noise_row)
+
+        lbl_hint = QLabel("Filters background fan hiss, room hum, and mic noise in real-time.")
+        lbl_hint.setStyleSheet("font-size: 11px; color: #8e8ea0;")
+        noise_form.addRow("", lbl_hint)
+        layout.addWidget(grp_noise)
+
         layout.addStretch()
+
+    def _on_noise_slider_changed(self, val: int):
+        self._update_noise_label(val)
+
+    def _update_noise_label(self, val: int):
+        if val <= 0:
+            self.lbl_noise_val.setText("Off (0%)")
+            self.lbl_noise_val.setStyleSheet("font-weight: bold; color: #8e8ea0; min-width: 100px;")
+        elif val <= 35:
+            self.lbl_noise_val.setText(f"{val}% (Low)")
+            self.lbl_noise_val.setStyleSheet("font-weight: bold; color: #4ade80; min-width: 100px;")
+        elif val <= 70:
+            self.lbl_noise_val.setText(f"{val}% (Balanced)")
+            self.lbl_noise_val.setStyleSheet("font-weight: bold; color: #00ADB5; min-width: 100px;")
+        else:
+            self.lbl_noise_val.setText(f"{val}% (Aggressive)")
+            self.lbl_noise_val.setStyleSheet("font-weight: bold; color: #f59e0b; min-width: 100px;")
 
     def _setup_webcam_overlays_tab(self):
         layout = QVBoxLayout(self.tab_webcam_overlays)
@@ -364,6 +402,11 @@ class SettingsDialog(QDialog):
             if idx >= 0:
                 self.combo_webcam_audio_dev.setCurrentIndex(idx)
 
+        # Load noise reduction
+        noise_val = int(settings.get("noise_reduction", 0))
+        self.slider_noise_reduction.setValue(noise_val)
+        self._update_noise_label(noise_val)
+
         # Load cameras
         self._refresh_camera_devices()
         shape = settings.get("webcam_shape", "circle")
@@ -408,6 +451,7 @@ class SettingsDialog(QDialog):
         settings.set("record_webcam_audio", self.chk_webcam_audio.isChecked())
         settings.set("webcam_audio_device_id", self.combo_webcam_audio_dev.currentData())
         settings.set("webcam_audio_volume", self.slider_webcam_vol.value())
+        settings.set("noise_reduction", self.slider_noise_reduction.value())
 
         # Save Webcam Settings
         if self.combo_cam_dev.currentData() is not None:
