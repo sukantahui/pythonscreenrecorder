@@ -522,7 +522,7 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, "chk_mic"):
             self.chk_mic.blockSignals(True)
-            self.chk_mic.setChecked(settings.get("record_microphone", True) and len(mics) > 0)
+            self.chk_mic.setChecked(settings.get("record_microphone", True))
             self.chk_mic.blockSignals(False)
 
         # Auto-match webcam audio device ID for when user decides to enable it
