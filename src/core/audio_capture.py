@@ -52,6 +52,8 @@ class AudioCaptureWorker:
         self._system_stream: Optional[sd.InputStream] = None
         self._mic_stream: Optional[sd.InputStream] = None
         self._webcam_stream: Optional[sd.InputStream] = None
+        self._wasapi_loopback_active = False
+        self._wasapi_thread: Optional[threading.Thread] = None
 
         self._latest_system_level = 0.0
         self._latest_mic_level = 0.0
@@ -82,6 +84,11 @@ class AudioCaptureWorker:
 
         for idx, dev in enumerate(devices):
             api_name = hostapis[dev["hostapi"]]["name"]
+
+            # Exclude raw Windows WDM-KS devices which don't support PortAudio InputStream blocking API
+            if "WDM-KS" in api_name:
+                continue
+
             is_cam = cls.is_webcam_audio_device(dev["name"])
             dev_info = {
                 "id": idx,
@@ -197,6 +204,97 @@ class AudioCaptureWorker:
 
         return None
 
+    def _wasapi_loopback_loop(self):
+        """Dedicated WASAPI loopback capture thread using PyAudioWPatch on Windows."""
+        p = None
+        stream = None
+        try:
+            import pyaudiowpatch as pyaudio
+            p = pyaudio.PyAudio()
+            try:
+                wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+                default_speakers = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
+                if not default_speakers.get("isLoopbackDevice", False):
+                    for loopback in p.get_loopback_device_info_generator():
+                        if default_speakers["name"] in loopback["name"]:
+                            default_speakers = loopback
+                            break
+
+                channels = min(2, max(1, int(default_speakers.get("maxInputChannels", 2))))
+                dev_rate = int(default_speakers.get("defaultSampleRate", AUDIO_SAMPLE_RATE))
+
+                stream = p.open(
+                    format=pyaudio.paInt16,
+                    channels=channels,
+                    rate=dev_rate,
+                    input=True,
+                    input_device_index=default_speakers["index"],
+                    frames_per_buffer=AUDIO_CHUNK_SIZE,
+                )
+                self._wasapi_loopback_active = True
+                print(f"[AudioCaptureWorker] System WASAPI loopback started on: {default_speakers.get('name')} ({dev_rate} Hz, ch={channels})")
+
+                while self._running:
+                    if self._paused:
+                        time.sleep(0.02)
+                        continue
+
+                    try:
+                        data = stream.read(AUDIO_CHUNK_SIZE, exception_on_overflow=False)
+                    except Exception:
+                        time.sleep(0.005)
+                        continue
+
+                    if not data:
+                        time.sleep(0.005)
+                        continue
+
+                    samples = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+                    if channels == 1:
+                        chunk = np.column_stack((samples, samples))
+                    else:
+                        chunk = samples.reshape(-1, channels)
+                        if channels > 2:
+                            chunk = chunk[:, :2]
+
+                    if dev_rate != AUDIO_SAMPLE_RATE and len(chunk) > 0:
+                        new_len = int(len(chunk) * AUDIO_SAMPLE_RATE / dev_rate)
+                        chunk = np.interp(
+                            np.linspace(0, len(chunk), new_len, endpoint=False),
+                            np.arange(len(chunk)),
+                            chunk,
+                        )
+
+                    rms = np.sqrt(np.mean(chunk**2)) if len(chunk) > 0 else 0.0
+                    self._latest_system_level = min(float(rms * 3.0), 1.0)
+
+                    scaled = chunk * self.system_volume
+                    try:
+                        self._sys_chunk_queue.put_nowait(scaled)
+                    except queue.Full:
+                        try:
+                            self._sys_chunk_queue.get_nowait()
+                            self._sys_chunk_queue.put_nowait(scaled)
+                        except Exception:
+                            pass
+
+            finally:
+                if stream:
+                    try:
+                        stream.stop_stream()
+                        stream.close()
+                    except Exception:
+                        pass
+                if p:
+                    try:
+                        p.terminate()
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"[AudioCaptureWorker] System loopback stream error: {e}")
+        finally:
+            self._wasapi_loopback_active = False
+
     def _system_audio_callback(self, indata, frames, time_info, status):
         if self._paused:
             return
@@ -207,7 +305,11 @@ class AudioCaptureWorker:
         try:
             self._sys_chunk_queue.put_nowait(scaled.copy())
         except queue.Full:
-            pass
+            try:
+                self._sys_chunk_queue.get_nowait()
+                self._sys_chunk_queue.put_nowait(scaled.copy())
+            except Exception:
+                pass
 
     def start_recording(self, start_time: Optional[float] = None):
         """Begin actively pushing audio chunks into recording queue."""
@@ -234,7 +336,11 @@ class AudioCaptureWorker:
         try:
             self._mic_chunk_queue.put_nowait(scaled.copy())
         except queue.Full:
-            pass
+            try:
+                self._mic_chunk_queue.get_nowait()
+                self._mic_chunk_queue.put_nowait(scaled.copy())
+            except Exception:
+                pass
 
     def _webcam_audio_callback(self, indata, frames, time_info, status):
         if self._paused:
@@ -247,10 +353,14 @@ class AudioCaptureWorker:
         try:
             self._cam_chunk_queue.put_nowait(scaled.copy())
         except queue.Full:
-            pass
+            try:
+                self._cam_chunk_queue.get_nowait()
+                self._cam_chunk_queue.put_nowait(scaled.copy())
+            except Exception:
+                pass
 
     def _mixer_loop(self):
-        """Pulls audio chunks, mixes system + mic + webcam, and enqueues to main audio queue."""
+        """Pulls audio chunks, mixes active sources without latency accumulation, and feeds audio queue."""
         def _to_stereo(chunk):
             if chunk is None:
                 return None
@@ -267,29 +377,60 @@ class AudioCaptureWorker:
                 time.sleep(0.02)
                 continue
 
+            sys_active = self.record_system_audio and (
+                getattr(self, "_wasapi_loopback_active", False) or (self._system_stream is not None)
+            )
+            mic_active = self.record_mic and (self._mic_stream is not None)
+            cam_active = self.record_webcam_audio and (self._webcam_stream is not None)
+
+            # If no audio sources are running, avoid busy-waiting
+            if not (sys_active or mic_active or cam_active):
+                time.sleep(0.02)
+                continue
+
             sys_chunk = None
             mic_chunk = None
             cam_chunk = None
 
-            if self.record_system_audio:
+            # 1. Non-blocking retrieval from active sources
+            if sys_active:
                 try:
-                    sys_chunk = self._sys_chunk_queue.get(timeout=0.04)
+                    sys_chunk = self._sys_chunk_queue.get_nowait()
                 except queue.Empty:
                     pass
 
-            if self.record_mic:
+            if mic_active:
                 try:
-                    mic_chunk = self._mic_chunk_queue.get(timeout=0.04)
+                    mic_chunk = self._mic_chunk_queue.get_nowait()
                 except queue.Empty:
                     pass
 
-            if self.record_webcam_audio:
+            if cam_active:
                 try:
-                    cam_chunk = self._cam_chunk_queue.get(timeout=0.04)
+                    cam_chunk = self._cam_chunk_queue.get_nowait()
                 except queue.Empty:
                     pass
 
-            # Gather active non-empty stereo chunks
+            # 2. Time-alignment: if both system and mic are active but one is temporarily behind,
+            # wait a short window (up to 12ms) for the other source before mixing
+            if sys_active and mic_active:
+                if sys_chunk is not None and mic_chunk is None:
+                    try:
+                        mic_chunk = self._mic_chunk_queue.get(timeout=0.012)
+                    except queue.Empty:
+                        pass
+                elif mic_chunk is not None and sys_chunk is None:
+                    try:
+                        sys_chunk = self._sys_chunk_queue.get(timeout=0.012)
+                    except queue.Empty:
+                        pass
+
+            # If no active chunk is ready yet, yield CPU briefly
+            if sys_chunk is None and mic_chunk is None and cam_chunk is None:
+                time.sleep(0.004)
+                continue
+
+            # 3. Gather active stereo chunks
             active_chunks = []
             for c in (sys_chunk, mic_chunk, cam_chunk):
                 stereo = _to_stereo(c)
@@ -297,7 +438,6 @@ class AudioCaptureWorker:
                     active_chunks.append(stereo)
 
             if not active_chunks:
-                time.sleep(0.01)
                 continue
 
             target_len = min(len(c) for c in active_chunks)
@@ -329,64 +469,149 @@ class AudioCaptureWorker:
         self._running = True
         self._paused = False
 
+        # 1. System audio capture
         if self.record_system_audio:
-            loopback_dev = self.get_default_loopback_device()
+            # First try PyAudioWPatch for native Windows WASAPI loopback
             try:
-                self._system_stream = sd.InputStream(
-                    samplerate=AUDIO_SAMPLE_RATE,
-                    channels=AUDIO_CHANNELS,
-                    blocksize=AUDIO_CHUNK_SIZE,
-                    dtype="float32",
-                    device=loopback_dev,
-                    callback=self._system_audio_callback,
+                self._wasapi_thread = threading.Thread(
+                    target=self._wasapi_loopback_loop, daemon=True, name="WASAPILoopbackThread"
                 )
-                self._system_stream.start()
+                self._wasapi_thread.start()
+                # Give WASAPI loopback thread a moment to initialize
+                time.sleep(0.05)
             except Exception as e:
-                print(f"[AudioCaptureWorker] System loopback stream error: {e}")
+                print(f"[AudioCaptureWorker] Could not start WASAPI thread: {e}")
 
-        if self.record_mic:
-            try:
-                channels = 1
-                if self.mic_device_id is not None:
+            # Fallback to sounddevice loopback if WASAPI loopback didn't activate
+            if not getattr(self, "_wasapi_loopback_active", False):
+                loopback_dev = self.get_default_loopback_device()
+                if loopback_dev is not None:
                     try:
-                        dev_info = sd.query_devices(self.mic_device_id)
-                        channels = min(max(int(dev_info.get("max_input_channels", 1)), 1), 2)
+                        d_info = sd.query_devices(loopback_dev)
+                        out_ch = int(d_info.get("max_output_channels", 0))
+                        in_ch = int(d_info.get("max_input_channels", 0))
+                        cand = out_ch if out_ch > 0 else in_ch
+                        sys_channels = cand if cand > 0 else AUDIO_CHANNELS
+                        for ch in [sys_channels, 2, 1]:
+                            try:
+                                self._system_stream = sd.InputStream(
+                                    samplerate=AUDIO_SAMPLE_RATE,
+                                    channels=ch,
+                                    blocksize=AUDIO_CHUNK_SIZE,
+                                    dtype="float32",
+                                    device=loopback_dev,
+                                    callback=self._system_audio_callback,
+                                )
+                                self._system_stream.start()
+                                print(f"[AudioCaptureWorker] Fallback sounddevice loopback started on device {loopback_dev}")
+                                break
+                            except Exception:
+                                pass
+                    except Exception as e2:
+                        print(f"[AudioCaptureWorker] Sounddevice loopback fallback error: {e2}")
+
+        # 2. Microphone capture with device validation and automatic default fallback
+        if self.record_mic:
+            mic_id = self.mic_device_id
+            # Validate device has real input channels
+            if mic_id is not None:
+                try:
+                    dev_info = sd.query_devices(mic_id)
+                    if int(dev_info.get("max_input_channels", 0)) <= 0:
+                        print(f"[AudioCaptureWorker] Device {mic_id} ({dev_info.get('name')}) is output-only. Falling back to default input.")
+                        mic_id = None
+                except Exception as e:
+                    print(f"[AudioCaptureWorker] Error querying mic {mic_id}: {e}. Falling back to default.")
+                    mic_id = None
+
+            device_candidates = [mic_id] if mic_id is not None else [None]
+            if mic_id is not None:
+                device_candidates.append(None)  # Add default fallback if specific device fails
+
+            opened = False
+            for target_dev in device_candidates:
+                cand_channels = [1, 2]
+                if target_dev is not None:
+                    try:
+                        d_info = sd.query_devices(target_dev)
+                        max_in = int(d_info.get("max_input_channels", 1))
+                        cand_channels = [max_in, 1, 2]
+                    except Exception:
+                        cand_channels = [1, 2]
+
+                channel_list = []
+                for ch in cand_channels:
+                    if ch not in channel_list and ch > 0:
+                        channel_list.append(ch)
+
+                for ch in channel_list:
+                    try:
+                        self._mic_stream = sd.InputStream(
+                            samplerate=AUDIO_SAMPLE_RATE,
+                            channels=ch,
+                            blocksize=AUDIO_CHUNK_SIZE,
+                            dtype="float32",
+                            device=target_dev,
+                            callback=self._mic_audio_callback,
+                        )
+                        self._mic_stream.start()
+                        opened = True
+                        print(f"[AudioCaptureWorker] Microphone started on device {target_dev} (channels={ch})")
+                        break
                     except Exception:
                         pass
+                if opened:
+                    break
 
-                self._mic_stream = sd.InputStream(
-                    samplerate=AUDIO_SAMPLE_RATE,
-                    channels=channels,
-                    blocksize=AUDIO_CHUNK_SIZE,
-                    dtype="float32",
-                    device=self.mic_device_id,
-                    callback=self._mic_audio_callback,
-                )
-                self._mic_stream.start()
-            except Exception as e:
-                print(f"[AudioCaptureWorker] Microphone stream error: {e}")
+            if not opened:
+                print(f"[AudioCaptureWorker] Warning: Could not open any microphone stream.")
 
+        # 3. Webcam audio capture with validation
         if self.record_webcam_audio and self.webcam_audio_device_id is not None:
+            cam_dev_id = self.webcam_audio_device_id
             try:
-                channels = 1
+                dev_info = sd.query_devices(cam_dev_id)
+                if int(dev_info.get("max_input_channels", 0)) <= 0:
+                    cam_dev_id = None
+            except Exception:
+                cam_dev_id = None
+
+            if cam_dev_id is not None:
+                cand_channels = [1, 2]
                 try:
-                    dev_info = sd.query_devices(self.webcam_audio_device_id)
-                    channels = min(max(int(dev_info.get("max_input_channels", 1)), 1), 2)
+                    d_info = sd.query_devices(cam_dev_id)
+                    max_in = int(d_info.get("max_input_channels", 1))
+                    cand_channels = [max_in, 1, 2]
                 except Exception:
                     pass
 
-                self._webcam_stream = sd.InputStream(
-                    samplerate=AUDIO_SAMPLE_RATE,
-                    channels=channels,
-                    blocksize=AUDIO_CHUNK_SIZE,
-                    dtype="float32",
-                    device=self.webcam_audio_device_id,
-                    callback=self._webcam_audio_callback,
-                )
-                self._webcam_stream.start()
-            except Exception as e:
-                print(f"[AudioCaptureWorker] Webcam audio stream error: {e}")
+                channel_list = []
+                for ch in cand_channels:
+                    if ch not in channel_list and ch > 0:
+                        channel_list.append(ch)
 
+                opened = False
+                for ch in channel_list:
+                    try:
+                        self._webcam_stream = sd.InputStream(
+                            samplerate=AUDIO_SAMPLE_RATE,
+                            channels=ch,
+                            blocksize=AUDIO_CHUNK_SIZE,
+                            dtype="float32",
+                            device=cam_dev_id,
+                            callback=self._webcam_audio_callback,
+                        )
+                        self._webcam_stream.start()
+                        opened = True
+                        print(f"[AudioCaptureWorker] Webcam audio started on device {cam_dev_id} (channels={ch})")
+                        break
+                    except Exception:
+                        pass
+
+                if not opened:
+                    print(f"[AudioCaptureWorker] Warning: Could not open webcam audio on device {cam_dev_id}.")
+
+        # 4. Launch mixer thread
         self._mixer_thread = threading.Thread(target=self._mixer_loop, daemon=True, name="AudioMixerThread")
         self._mixer_thread.start()
 
@@ -397,8 +622,16 @@ class AudioCaptureWorker:
         self._paused = False
 
     def stop(self):
-        """Stop all streams."""
+        """Stop all streams and mixer thread."""
         self._running = False
+
+        if self._wasapi_thread and self._wasapi_thread.is_alive():
+            try:
+                self._wasapi_thread.join(timeout=1.0)
+            except Exception:
+                pass
+            self._wasapi_thread = None
+
         if self._system_stream:
             try:
                 self._system_stream.stop()
@@ -422,3 +655,11 @@ class AudioCaptureWorker:
             except Exception:
                 pass
             self._webcam_stream = None
+
+        if self._mixer_thread and self._mixer_thread.is_alive():
+            try:
+                self._mixer_thread.join(timeout=1.0)
+            except Exception:
+                pass
+            self._mixer_thread = None
+

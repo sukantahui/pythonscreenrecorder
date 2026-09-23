@@ -5,9 +5,10 @@ volume control, video trimming, GIF creation, and MP3 extraction.
 """
 
 import os
-from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtCore import Qt, QUrl, QTimer, QMimeData
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
+from PyQt6.QtGui import QImage
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -18,6 +19,8 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QMessageBox,
     QFrame,
+    QComboBox,
+    QApplication,
 )
 from src.services.post_processor import post_processor
 
@@ -29,7 +32,8 @@ class PreviewDialog(QDialog):
         super().__init__(parent)
         self.video_path = video_path
         self.setWindowTitle(f"Recording Complete - {os.path.basename(video_path)}")
-        self.setFixedSize(760, 600)
+        self.resize(800, 600)
+        self.setMinimumSize(600, 480)
         self.setModal(True)
 
         self.duration_ms = 0
@@ -100,6 +104,15 @@ class PreviewDialog(QDialog):
         self.slider_vol.valueChanged.connect(self._on_volume_changed)
         ctrl_layout.addWidget(self.slider_vol)
 
+        # Playback Speed Dropdown
+        self.combo_speed = QComboBox()
+        self.combo_speed.addItems(["0.5x", "1.0x", "1.25x", "1.5x", "2.0x"])
+        self.combo_speed.setCurrentText("1.0x")
+        self.combo_speed.setToolTip("Playback Speed")
+        self.combo_speed.setFixedWidth(68)
+        self.combo_speed.currentTextChanged.connect(self._on_speed_changed)
+        ctrl_layout.addWidget(self.combo_speed)
+
         # Trimmer Controls Card
         trim_card = QFrame(self)
         trim_card.setStyleSheet("background-color: #161820; border-radius: 8px; padding: 2px;")
@@ -150,6 +163,17 @@ class PreviewDialog(QDialog):
 
         # 5. Export & Actions Row
         actions_layout = QHBoxLayout()
+
+        self.btn_copy = QPushButton("📋 Copy File")
+        self.btn_copy.setToolTip("Copy video file directly to clipboard for Ctrl+V paste")
+        self.btn_copy.clicked.connect(self._copy_video_file)
+        actions_layout.addWidget(self.btn_copy)
+
+        self.btn_snapshot = QPushButton("📸 Snapshot")
+        self.btn_snapshot.setToolTip("Capture current frame as PNG image & copy to clipboard")
+        self.btn_snapshot.clicked.connect(self._take_snapshot)
+        actions_layout.addWidget(self.btn_snapshot)
+
         btn_gif = QPushButton("🎞️ Make GIF")
         btn_gif.clicked.connect(self._export_gif)
         actions_layout.addWidget(btn_gif)
@@ -282,6 +306,62 @@ class PreviewDialog(QDialog):
             QMessageBox.information(self, "Audio Extracted", f"MP3 audio saved to:\n{audio_path}")
         else:
             QMessageBox.critical(self, "Export Error", "Failed to extract MP3 audio.")
+
+    def _on_speed_changed(self, text: str):
+        try:
+            rate = float(text.replace("x", ""))
+            self.player.setPlaybackRate(rate)
+        except Exception:
+            pass
+
+    def _copy_video_file(self):
+        """Copy video file URL and path to clipboard for Ctrl+V paste."""
+        if not os.path.exists(self.video_path):
+            return
+        abs_path = os.path.abspath(self.video_path)
+        mime = QMimeData()
+        mime.setUrls([QUrl.fromLocalFile(abs_path)])
+        mime.setText(abs_path)
+        QApplication.clipboard().setMimeData(mime)
+
+        orig_text = self.btn_copy.text()
+        self.btn_copy.setText("✔ Copied!")
+        QTimer.singleShot(1800, lambda: self.btn_copy.setText(orig_text))
+
+    def _take_snapshot(self):
+        """Extract lossless PNG frame at current playback position and copy to clipboard."""
+        if not os.path.exists(self.video_path):
+            return
+        pos_sec = max(0.0, self.player.position() / 1000.0)
+        from src.core.hardware_detect import get_ffmpeg_binary
+        import subprocess
+
+        ffmpeg_bin = get_ffmpeg_binary()
+        dir_name = os.path.dirname(self.video_path)
+        base_name = os.path.splitext(os.path.basename(self.video_path))[0]
+        out_png = os.path.join(dir_name, f"{base_name}_Snapshot_{int(pos_sec * 1000)}ms.png")
+
+        cmd = [
+            ffmpeg_bin,
+            "-y",
+            "-ss", str(pos_sec),
+            "-i", self.video_path,
+            "-vframes", "1",
+            "-q:v", "2",
+            out_png,
+        ]
+        flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        try:
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags, timeout=5)
+            if os.path.exists(out_png):
+                img = QImage(out_png)
+                if not img.isNull():
+                    QApplication.clipboard().setImage(img)
+                orig_text = self.btn_snapshot.text()
+                self.btn_snapshot.setText("✔ Saved!")
+                QTimer.singleShot(1800, lambda: self.btn_snapshot.setText(orig_text))
+        except Exception as e:
+            QMessageBox.warning(self, "Snapshot Error", f"Failed to capture frame: {e}")
 
     def closeEvent(self, event):
         self.player.stop()

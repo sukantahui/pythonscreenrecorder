@@ -5,7 +5,7 @@ Primary Dashboard and Main Application Window.
 import os
 import glob
 from typing import Optional, Dict, Any
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot, QUrl
+from PyQt6.QtCore import Qt, QTimer, pyqtSlot, QUrl, QMimeData
 from PyQt6.QtGui import QIcon, QFont, QColor, QDesktopServices
 from PyQt6.QtWidgets import (
     QMainWindow,
@@ -24,6 +24,8 @@ from PyQt6.QtWidgets import (
     QButtonGroup,
     QMessageBox,
     QApplication,
+    QMenu,
+    QScrollArea,
 )
 
 from src.config.constants import (
@@ -51,6 +53,7 @@ from src.core.controller import controller
 from src.core.audio_capture import AudioCaptureWorker
 from src.core.camera_detect import camera_detector
 from src.overlays.region_selector import RegionSelectorOverlay
+from src.overlays.countdown_overlay import CountdownOverlay
 from src.overlays.annotation_canvas import AnnotationCanvas
 from src.overlays.webcam_pip import WebcamPiPOverlay
 from src.overlays.cursor_effects import CursorEffectsOverlay
@@ -71,7 +74,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION} - {COMPANY_NAME} ({COMPANY_SHORT})")
-        self.setFixedSize(760, 720)
+        self.resize(780, 740)
+        self.setMinimumSize(640, 520)
 
         self.controller = controller
         self.selected_mode = MODE_FULLSCREEN
@@ -80,6 +84,7 @@ class MainWindow(QMainWindow):
 
         # Overlays & Toolbars
         self.region_selector = RegionSelectorOverlay()
+        self.countdown_overlay = CountdownOverlay()
         self.annotation_canvas = AnnotationCanvas()
         self.webcam_overlay: Optional[WebcamPiPOverlay] = None
         self.cursor_effects = CursorEffectsOverlay()
@@ -98,6 +103,7 @@ class MainWindow(QMainWindow):
     def _setup_ui(self):
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
+
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(20, 18, 20, 14)
         main_layout.setSpacing(14)
@@ -121,19 +127,23 @@ class MainWindow(QMainWindow):
         header_layout.addStretch()
 
         btn_folder = QPushButton("📁 Recordings")
+        btn_folder.setProperty("class", "SmallBtn")
         btn_folder.clicked.connect(lambda: post_processor.open_folder(settings.get("output_dir", DEFAULT_OUTPUT_DIR)))
         header_layout.addWidget(btn_folder)
 
         btn_shortcuts = QPushButton("⌨️ Shortcuts")
+        btn_shortcuts.setProperty("class", "SmallBtn")
         btn_shortcuts.setToolTip("View keyboard shortcuts reference")
         btn_shortcuts.clicked.connect(self._open_shortcuts)
         header_layout.addWidget(btn_shortcuts)
 
         btn_settings = QPushButton("⚙️ Settings")
+        btn_settings.setProperty("class", "SmallBtn")
         btn_settings.clicked.connect(self._open_settings)
         header_layout.addWidget(btn_settings)
 
         btn_about = QPushButton("ℹ️ About")
+        btn_about.setProperty("class", "SmallBtn")
         btn_about.clicked.connect(self._open_about)
         header_layout.addWidget(btn_about)
 
@@ -169,13 +179,15 @@ class MainWindow(QMainWindow):
 
         mode_card_layout.addLayout(mode_layout)
 
-        # Aspect Ratio Presets Row for Social Media & Streaming
-        presets_row = QHBoxLayout()
-        presets_row.setSpacing(6)
-
+        # Aspect Ratio Presets - 2 Compact Rows for Social Media & Streaming
+        presets_r1 = QHBoxLayout()
+        presets_r1.setSpacing(6)
         lbl_presets = QLabel("Locked Ratio Presets:")
         lbl_presets.setStyleSheet("color: #9CA3AF; font-size: 11px; font-weight: bold; margin-right: 4px;")
-        presets_row.addWidget(lbl_presets)
+        presets_r1.addWidget(lbl_presets)
+
+        presets_r2 = QHBoxLayout()
+        presets_r2.setSpacing(6)
 
         self.preset_chips: Dict[str, QPushButton] = {}
         chip_defs = [
@@ -188,17 +200,22 @@ class MainWindow(QMainWindow):
             ("freeform", "🔓 Freeform", "Unlocked Custom Region"),
         ]
 
-        for key, text, tip in chip_defs:
+        for i, (key, text, tip) in enumerate(chip_defs):
             btn = QPushButton(text)
             btn.setProperty("class", "PresetChip")
             btn.setCheckable(True)
             btn.setToolTip(tip)
             btn.clicked.connect(lambda checked, k=key: self._on_preset_chip_clicked(k))
             self.preset_chips[key] = btn
-            presets_row.addWidget(btn)
+            if i < 3:
+                presets_r1.addWidget(btn)
+            else:
+                presets_r2.addWidget(btn)
 
-        presets_row.addStretch()
-        mode_card_layout.addLayout(presets_row)
+        presets_r1.addStretch()
+        presets_r2.addStretch()
+        mode_card_layout.addLayout(presets_r1)
+        mode_card_layout.addLayout(presets_r2)
 
         main_layout.addWidget(mode_card)
 
@@ -235,6 +252,8 @@ class MainWindow(QMainWindow):
         mic_layout.addWidget(self.chk_mic)
 
         self.combo_mic_source = QComboBox()
+        self.combo_mic_source.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.combo_mic_source.setMinimumContentsLength(8)
         self.combo_mic_source.setToolTip("Select microphone or webcam audio input")
         self.combo_mic_source.currentIndexChanged.connect(self._on_mic_source_changed)
         mic_layout.addWidget(self.combo_mic_source)
@@ -281,15 +300,16 @@ class MainWindow(QMainWindow):
         cam_top_row.addWidget(self.chk_cam)
 
         self.btn_preview_cam = QPushButton("👁️ Preview")
+        self.btn_preview_cam.setProperty("class", "SmallBtn")
         self.btn_preview_cam.setToolTip("Test webcam video preview on screen")
-        self.btn_preview_cam.setFixedHeight(26)
-        self.btn_preview_cam.setStyleSheet("padding: 2px 8px; font-size: 11px;")
         self.btn_preview_cam.clicked.connect(self._toggle_webcam_preview)
         cam_top_row.addWidget(self.btn_preview_cam)
         cam_layout.addLayout(cam_top_row)
 
         # Camera Device Dropdown
         self.combo_cam_dev = QComboBox()
+        self.combo_cam_dev.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.combo_cam_dev.setMinimumContentsLength(8)
         self.combo_cam_dev.currentIndexChanged.connect(self._on_camera_device_changed)
         cam_layout.addWidget(self.combo_cam_dev)
 
@@ -308,7 +328,10 @@ class MainWindow(QMainWindow):
         self.chk_cam_audio.toggled.connect(self._on_webcam_audio_toggled)
         cam_layout.addWidget(self.chk_cam_audio)
 
-        devices_row.addWidget(self.card_cam)
+        devices_row.addWidget(self.card_cam, 1)
+        devices_row.setStretch(0, 1)
+        devices_row.setStretch(1, 1)
+        devices_row.setStretch(2, 1)
         main_layout.addLayout(devices_row)
 
         # Populate camera and audio devices
@@ -356,14 +379,33 @@ class MainWindow(QMainWindow):
         self.btn_record.clicked.connect(self._toggle_recording)
         main_layout.addWidget(self.btn_record)
 
-        # 6. Recent Recordings List
+        # 6. Recent Recordings List & Quick Actions
+        recent_header = QHBoxLayout()
         lbl_recent = QLabel("Recent Recordings")
-        lbl_recent.setStyleSheet("font-size: 14px; font-weight: bold; color: #F9FAFB; margin-top: 4px;")
-        main_layout.addWidget(lbl_recent)
+        lbl_recent.setStyleSheet("font-size: 13px; font-weight: bold; color: #F9FAFB;")
+        recent_header.addWidget(lbl_recent)
+        recent_header.addStretch()
+
+        btn_refresh_recent = QPushButton("🔄 Refresh")
+        btn_refresh_recent.setProperty("class", "SmallBtn")
+        btn_refresh_recent.setToolTip("Refresh list of recent recordings")
+        btn_refresh_recent.clicked.connect(self._refresh_recent_recordings)
+        recent_header.addWidget(btn_refresh_recent)
+
+        btn_open_all = QPushButton("📂 Open Folder")
+        btn_open_all.setProperty("class", "SmallBtn")
+        btn_open_all.setToolTip("Open recordings folder in Windows Explorer")
+        btn_open_all.clicked.connect(lambda: post_processor.open_folder(settings.get("output_dir", DEFAULT_OUTPUT_DIR)))
+        recent_header.addWidget(btn_open_all)
+
+        main_layout.addLayout(recent_header)
 
         self.list_recent = QListWidget(self)
+        self.list_recent.setMinimumHeight(130)
+        self.list_recent.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list_recent.customContextMenuRequested.connect(self._on_recent_context_menu)
         self.list_recent.itemDoubleClicked.connect(self._on_recent_item_double_clicked)
-        main_layout.addWidget(self.list_recent)
+        main_layout.addWidget(self.list_recent, 1)
 
         # 7. Footer Branding Bar
         footer_layout = QHBoxLayout()
@@ -371,14 +413,14 @@ class MainWindow(QMainWindow):
         lbl_footer = QLabel(
             f"<span>Developer: <b>{DEVELOPER_NAME}</b> | <b>{COMPANY_NAME} ({COMPANY_SHORT})</b> | 🌐 <a href='{COMPANY_WEBSITE}' style='color: #818CF8; text-decoration: none;'>www.codernaccotax.co.in</a> | 📞 <a href='tel:{COMPANY_PHONE}' style='color: #818CF8; text-decoration: none;'>{COMPANY_PHONE}</a></span>"
         )
+        lbl_footer.setWordWrap(True)
         lbl_footer.setOpenExternalLinks(True)
         lbl_footer.setStyleSheet("font-size: 11px; color: #9CA3AF;")
-        footer_layout.addWidget(lbl_footer)
+        footer_layout.addWidget(lbl_footer, 1)
         footer_layout.addStretch()
 
         btn_footer_about = QPushButton("ℹ️ About")
-        btn_footer_about.setFixedHeight(24)
-        btn_footer_about.setStyleSheet("font-size: 11px; padding: 2px 10px; background-color: #1A1C24;")
+        btn_footer_about.setProperty("class", "SmallBtn")
         btn_footer_about.clicked.connect(self._open_about)
         footer_layout.addWidget(btn_footer_about)
 
@@ -424,9 +466,13 @@ class MainWindow(QMainWindow):
         audio_info = AudioCaptureWorker.get_audio_devices()
         mics = audio_info.get("microphones", [])
         saved_id = settings.get("mic_device_id")
-
+        valid_mic_ids = [m["id"] for m in mics]
         preferred_mic_id = AudioCaptureWorker.get_preferred_mic_device(prefer_iriun=True)
-        target_id = saved_id if saved_id is not None else preferred_mic_id
+
+        if saved_id is not None and saved_id not in valid_mic_ids:
+            target_id = preferred_mic_id
+        else:
+            target_id = saved_id if saved_id is not None else preferred_mic_id
 
         selected_idx = 0
         for i, mic in enumerate(mics):
@@ -434,14 +480,23 @@ class MainWindow(QMainWindow):
             is_iriun = any(k in mic["name"].lower() for k in ("iriun", "irium"))
             icon_tag = "📷 " if is_cam else "🎙️ "
             suffix = " [Iriun Webcam]" if is_iriun else (" [Webcam]" if is_cam else "")
-            self.combo_mic_source.addItem(f"{icon_tag}{mic['name']}{suffix}", mic["id"])
+
+            clean_name = mic["name"]
+            if "@System32" in clean_name:
+                import re
+                clean = re.sub(r"@System32\\drivers\\[^;]+;", "", clean_name)
+                clean = clean.replace("%1", "").replace("%0", "").strip(" ;()")
+                clean_name = f"Bluetooth ({clean})" if clean else "Bluetooth Audio"
+            elif len(clean_name) > 28:
+                clean_name = clean_name[:25] + "..."
+
+            self.combo_mic_source.addItem(f"{icon_tag}{clean_name}{suffix}", mic["id"])
             if target_id is not None and mic["id"] == target_id:
                 selected_idx = i + 1
 
         self.combo_mic_source.setCurrentIndex(selected_idx)
         chosen_mic_id = self.combo_mic_source.currentData()
-        if chosen_mic_id is not None:
-            settings.set("mic_device_id", chosen_mic_id)
+        settings.set("mic_device_id", chosen_mic_id)
 
         # Auto-match webcam audio device ID
         cam_name = self.combo_cam_dev.currentText() if hasattr(self, "combo_cam_dev") else "Iriun Webcam"
@@ -567,6 +622,10 @@ class MainWindow(QMainWindow):
         self.region_selector.region_selected.connect(self._on_region_selected)
         self.region_selector.cancelled.connect(self._on_region_cancelled)
 
+        # Countdown Overlay
+        self.countdown_overlay.finished.connect(self._execute_start_recording)
+        self.countdown_overlay.cancelled.connect(self._on_countdown_cancelled)
+
         # Floating Toolbar Signals
         self.floating_bar.pause_clicked.connect(controller.pause_recording)
         self.floating_bar.resume_clicked.connect(controller.resume_recording)
@@ -664,6 +723,20 @@ class MainWindow(QMainWindow):
             self.region_selector.show()
             return
 
+        cd_secs = int(settings.get("countdown_seconds", 3))
+        if cd_secs > 0:
+            self.lbl_status.setText(f"● Starting in {cd_secs}s... (Press ESC to cancel)")
+            self.btn_record.setEnabled(False)
+            self.countdown_overlay.start_countdown(seconds=cd_secs, region=self.selected_region)
+        else:
+            self._execute_start_recording()
+
+    def _on_countdown_cancelled(self):
+        self.btn_record.setEnabled(True)
+        self.lbl_status.setText("● Ready")
+
+    def _execute_start_recording(self):
+        self.btn_record.setEnabled(True)
         # Start creative overlays
         if settings.get("highlight_clicks", True):
             self.cursor_effects.start()
@@ -828,12 +901,22 @@ class MainWindow(QMainWindow):
         video_files = [f for f in files if f.lower().endswith((".mp4", ".mkv", ".webm", ".gif", ".png"))]
         video_files.sort(key=os.path.getmtime, reverse=True)
 
+        if not video_files:
+            empty_item = QListWidgetItem("No recordings yet. Hit Record (F9) to start!")
+            empty_item.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.list_recent.addItem(empty_item)
+            return
+
+        from datetime import datetime
         for vf in video_files[:10]:
             size_mb = os.path.getsize(vf) / (1024 * 1024)
             name = os.path.basename(vf)
+            mtime = os.path.getmtime(vf)
+            time_str = datetime.fromtimestamp(mtime).strftime("%b %d, %H:%M")
             icon = "🎬" if vf.lower().endswith((".mp4", ".mkv", ".webm")) else ("🎞️" if vf.lower().endswith(".gif") else "📸")
-            item = QListWidgetItem(f"{icon}  {name}  ({size_mb:.2f} MB)")
+            item = QListWidgetItem(f"{icon}  {name}   [{size_mb:.1f} MB  •  {time_str}]")
             item.setData(Qt.ItemDataRole.UserRole, vf)
+            item.setToolTip(f"Path: {vf}\nDouble-click to open/preview\nRight-click for options")
             self.list_recent.addItem(item)
 
     def _on_recent_item_double_clicked(self, item: QListWidgetItem):
@@ -844,6 +927,54 @@ class MainWindow(QMainWindow):
                 dlg.exec()
             else:
                 post_processor.open_folder(os.path.dirname(path))
+
+    def _on_recent_context_menu(self, pos):
+        item = self.list_recent.itemAt(pos)
+        if not item:
+            return
+        path = item.data(Qt.ItemDataRole.UserRole)
+        if not path or not os.path.exists(path):
+            return
+
+        menu = QMenu(self)
+        is_video = path.lower().endswith((".mp4", ".mkv", ".webm"))
+
+        act_play = menu.addAction("▶ Preview / Play" if is_video else "👁️ Open Image")
+        act_copy = menu.addAction("📋 Copy File")
+        act_reveal = menu.addAction("📂 Reveal in Explorer")
+        menu.addSeparator()
+        act_del = menu.addAction("🗑️ Delete File")
+
+        action = menu.exec(self.list_recent.mapToGlobal(pos))
+        if action == act_play:
+            self._on_recent_item_double_clicked(item)
+        elif action == act_copy:
+            clipboard = QApplication.clipboard()
+            mime = QMimeData()
+            mime.setUrls([QUrl.fromLocalFile(path)])
+            mime.setText(path)
+            clipboard.setMimeData(mime)
+            self.tray_service.show_notification("Copied to Clipboard", os.path.basename(path))
+        elif action == act_reveal:
+            import subprocess
+            try:
+                subprocess.run(f'explorer /select,"{os.path.normpath(path)}"', shell=True)
+            except Exception:
+                post_processor.open_folder(os.path.dirname(path))
+        elif action == act_del:
+            ret = QMessageBox.question(
+                self,
+                "Delete Recording",
+                f"Are you sure you want to permanently delete:\n{os.path.basename(path)}?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if ret == QMessageBox.StandardButton.Yes:
+                try:
+                    os.remove(path)
+                    self._refresh_recent_recordings()
+                except Exception as e:
+                    QMessageBox.warning(self, "Delete Failed", f"Could not delete file: {e}")
+
 
     def closeEvent(self, event):
         if controller.state in ["recording", "paused"]:

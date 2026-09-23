@@ -226,7 +226,26 @@ class FFmpegWriter:
 
     def _mux_audio_video(self):
         """Instantaneously remux video and audio into final output file with faststart."""
+        # 1. Guard against empty audio file (standard WAV header is 44 bytes)
+        audio_size = os.path.getsize(self.temp_audio_file) if (self.temp_audio_file and os.path.exists(self.temp_audio_file)) else 0
+        if audio_size <= 44:
+            print("[FFmpegWriter] Temp audio file contains 0 audio frames. Preserving pristine video without audio.")
+            if os.path.exists(self.intermediate_video) and self.intermediate_video != self.output_filepath:
+                try:
+                    if os.path.exists(self.output_filepath):
+                        os.remove(self.output_filepath)
+                    os.rename(self.intermediate_video, self.output_filepath)
+                except Exception as e:
+                    print(f"[FFmpegWriter] Error promoting intermediate video: {e}")
+            if self.temp_audio_file and os.path.exists(self.temp_audio_file):
+                try:
+                    os.remove(self.temp_audio_file)
+                except Exception:
+                    pass
+            return
+
         try:
+            # 2. Remux video + audio with A/V sync filter (do NOT use -shortest to avoid truncating video)
             remux_cmd = [
                 self.ffmpeg_path,
                 "-y",
@@ -236,7 +255,6 @@ class FFmpegWriter:
                 "-c:a", "aac",
                 "-b:a", "192k",
                 "-af", "aresample=async=1000:min_hard_comp=0.100000:first_pts=0",
-                "-shortest",
                 "-movflags", "+faststart",
                 self.output_filepath,
             ]
@@ -248,17 +266,28 @@ class FFmpegWriter:
                 creationflags=creationflags,
                 check=True,
             )
-            # Cleanup temp files
-            if os.path.exists(self.intermediate_video) and self.intermediate_video != self.output_filepath:
-                try:
-                    os.remove(self.intermediate_video)
-                except Exception:
-                    pass
-            if os.path.exists(self.temp_audio_file):
-                try:
-                    os.remove(self.temp_audio_file)
-                except Exception:
-                    pass
+
+            # 3. Verify output integrity
+            if os.path.exists(self.output_filepath) and os.path.getsize(self.output_filepath) > 1000:
+                # Cleanup temp files only on verified success
+                if os.path.exists(self.intermediate_video) and self.intermediate_video != self.output_filepath:
+                    try:
+                        os.remove(self.intermediate_video)
+                    except Exception:
+                        pass
+                if os.path.exists(self.temp_audio_file):
+                    try:
+                        os.remove(self.temp_audio_file)
+                    except Exception:
+                        pass
+            else:
+                # If remux output was unexpectedly small or missing, fall back to intermediate video
+                print("[FFmpegWriter] Remuxed output was unexpectedly small. Falling back to video.")
+                if os.path.exists(self.intermediate_video) and self.intermediate_video != self.output_filepath:
+                    if os.path.exists(self.output_filepath):
+                        os.remove(self.output_filepath)
+                    os.rename(self.intermediate_video, self.output_filepath)
+
         except Exception as e:
             print(f"[FFmpegWriter] Remux error: {e}")
             if os.path.exists(self.intermediate_video) and self.intermediate_video != self.output_filepath:

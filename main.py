@@ -25,7 +25,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Windows High-DPI handling is managed natively by Qt6 (Per-Monitor Aware V2)
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QFont
 from PyQt6.QtWidgets import QApplication
 import signal
 from src.config.constants import APP_NAME, APP_VERSION
@@ -51,6 +51,7 @@ def load_icon(app: QApplication):
 
 def main():
     app = QApplication(sys.argv)
+    app.setFont(QFont("Segoe UI", 10))
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
     app.setOrganizationName("Coder & AccoTax")

@@ -88,6 +88,29 @@ QPushButton:disabled {
     border-color: #1F222B;
 }
 
+/* Compact Utility Buttons (e.g. Open Folder, Refresh, Cam Preview, Header Tools) */
+QPushButton.SmallBtn, QPushButton[class="SmallBtn"] {
+    background-color: #20232E;
+    color: #F3F4F6;
+    border: 1px solid #2D313F;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    min-height: 28px;
+    max-height: 30px;
+}
+
+QPushButton.SmallBtn:hover, QPushButton[class="SmallBtn"]:hover {
+    background-color: #2B2F3D;
+    border-color: #6366F1;
+    color: #FFFFFF;
+}
+
+QPushButton.SmallBtn:pressed, QPushButton[class="SmallBtn"]:pressed {
+    background-color: #1A1C24;
+}
+
 /* Dropdown ComboBoxes */
 QComboBox {
     background-color: #161820;
@@ -240,4 +263,67 @@ QPushButton.PresetChip:checked {
     border: 1.5px solid #6366F1;
     font-weight: bold;
 }
+
+/* Audio Peak Level VU Meters */
+QProgressBar {
+    background-color: #12131A;
+    border: 1px solid #232734;
+    border-radius: 4px;
+    height: 7px;
+    text-align: center;
+}
+
+QProgressBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #10B981,
+        stop:0.65 #34D399,
+        stop:0.85 #F59E0B,
+        stop:1.0 #EF4444);
+    border-radius: 3px;
+}
+
+/* Modern Dark Scrollbars */
+QScrollBar:vertical {
+    background: #0D0E12;
+    width: 8px;
+    margin: 0px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical {
+    background: #2D313F;
+    min-height: 24px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #6366F1;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    background: #0D0E12;
+    height: 8px;
+    margin: 0px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal {
+    background: #2D313F;
+    min-width: 24px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #6366F1;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+
 
