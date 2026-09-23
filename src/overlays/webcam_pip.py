@@ -1,7 +1,7 @@
 """
-Draggable Webcam Picture-in-Picture (PiP) floating overlay.
-Supports live device switching, shapes (circle, rounded, rect),
-dynamic sizing, horizontal mirroring, and right-click context menu.
+Draggable & Resizable Webcam Picture-in-Picture (PiP) floating overlay.
+Supports mouse corner/edge drag resizing, mouse wheel resizing, live device switching,
+shapes (circle, rounded, rect), horizontal mirroring, and right-click context menu.
 """
 
 import sys
@@ -9,7 +9,7 @@ import threading
 import time
 from typing import Optional, List, Dict, Any
 from PyQt6.QtCore import Qt, QRect, QPoint, QTimer, pyqtSignal
-from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPainterPath, QFont, QAction
+from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPainterPath, QFont, QAction, QCursor
 from PyQt6.QtWidgets import QWidget, QApplication, QMenu
 import cv2
 import numpy as np
@@ -18,12 +18,14 @@ from src.core.camera_detect import camera_detector
 
 
 class WebcamPiPOverlay(QWidget):
-    """Floating draggable webcam preview overlay."""
+    """Floating draggable and resizable webcam preview overlay."""
 
     device_changed = pyqtSignal(int)
     shape_changed = pyqtSignal(str)
     size_changed = pyqtSignal(int)
     closed = pyqtSignal()
+
+    RESIZE_MARGIN = 18
 
     def __init__(
         self,
@@ -35,7 +37,7 @@ class WebcamPiPOverlay(QWidget):
         super().__init__()
         self.device_id = device_id
         self.shape_type = shape  # "circle", "rounded", "rect"
-        self.pip_size = size
+        self.pip_size = max(100, min(size, 600))
         self.is_mirrored = mirrored
         self.camera_name = "Camera"
 
@@ -46,6 +48,7 @@ class WebcamPiPOverlay(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setFixedSize(self.pip_size, self.pip_size)
+        self.setMouseTracking(True)
 
         self.current_qimage: Optional[QImage] = None
         self._running = False
@@ -54,8 +57,13 @@ class WebcamPiPOverlay(QWidget):
         self._capture_thread: Optional[threading.Thread] = None
         self._thread_lock = threading.Lock()
 
+        # Dragging & Resizing State
         self.drag_start = QPoint()
         self.is_dragging = False
+        self.is_resizing = False
+        self.resize_start_pos = QPoint()
+        self.resize_start_size = self.pip_size
+        self._is_hovered = False
 
         # Refresh timer for UI repaint (~30 FPS)
         self.timer = QTimer(self)
@@ -163,8 +171,8 @@ class WebcamPiPOverlay(QWidget):
         self.update()
 
     def set_size(self, size: int):
-        """Resize the PiP overlay."""
-        self.pip_size = max(120, min(size, 480))
+        """Resize the PiP overlay smoothly."""
+        self.pip_size = max(100, min(size, 600))
         self.setFixedSize(self.pip_size, self.pip_size)
         settings.set("webcam_size", self.pip_size)
         self.size_changed.emit(self.pip_size)
@@ -194,31 +202,86 @@ class WebcamPiPOverlay(QWidget):
         self.hide()
         self.closed.emit()
 
+    def _is_in_resize_zone(self, pos: QPoint) -> bool:
+        """Check if mouse position is in bottom-right resize zone or edge perimeter."""
+        x, y = pos.x(), pos.y()
+        w, h = self.width(), self.height()
+
+        # Bottom-right corner zone
+        if x >= w - self.RESIZE_MARGIN and y >= h - self.RESIZE_MARGIN:
+            return True
+
+        # Outer edge ring (for circle / rounded shapes)
+        if self.shape_type == "circle":
+            center_x, center_y = w / 2.0, h / 2.0
+            radius = min(w, h) / 2.0
+            dist = ((x - center_x) ** 2 + (y - center_y) ** 2) ** 0.5
+            return radius - self.RESIZE_MARGIN <= dist <= radius + 4
+
+        # For square/rect, bottom or right edges
+        return (x >= w - self.RESIZE_MARGIN) or (y >= h - self.RESIZE_MARGIN)
+
+    def enterEvent(self, event):
+        self._is_hovered = True
+        self.update()
+
+    def leaveEvent(self, event):
+        self._is_hovered = False
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+        self.update()
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.is_dragging = True
-            self.drag_start = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            pos = event.position().toPoint()
+            if self._is_in_resize_zone(pos):
+                self.is_resizing = True
+                self.is_dragging = False
+                self.resize_start_pos = event.globalPosition().toPoint()
+                self.resize_start_size = self.pip_size
+            else:
+                self.is_dragging = True
+                self.is_resizing = False
+                self.drag_start = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
         elif event.button() == Qt.MouseButton.RightButton:
             self._show_context_menu(event.globalPosition().toPoint())
 
     def mouseMoveEvent(self, event):
-        if self.is_dragging:
-            self.move(event.globalPosition().toPoint() - self.drag_start)
+        pos = event.position().toPoint()
+        global_pos = event.globalPosition().toPoint()
+
+        if self.is_resizing:
+            delta_x = global_pos.x() - self.resize_start_pos.x()
+            delta_y = global_pos.y() - self.resize_start_pos.y()
+            delta = max(delta_x, delta_y)
+            new_size = self.resize_start_size + delta
+            self.set_size(new_size)
+            self.setCursor(Qt.CursorShape.SizeFDiagCursor)
+        elif self.is_dragging:
+            self.move(global_pos - self.drag_start)
+            self.setCursor(Qt.CursorShape.SizeAllCursor)
+        else:
+            # Update hover cursor
+            if self._is_in_resize_zone(pos):
+                self.setCursor(Qt.CursorShape.SizeFDiagCursor)
+            else:
+                self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.is_dragging = False
+            self.is_resizing = False
+            self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def wheelEvent(self, event):
-        """Support resizing via mouse scroll wheel."""
+        """Smoothly resize via mouse scroll wheel."""
         delta = event.angleDelta().y()
         if delta > 0:
-            self.set_size(self.pip_size + 20)
+            self.set_size(self.pip_size + 16)
         elif delta < 0:
-            self.set_size(self.pip_size - 20)
+            self.set_size(self.pip_size - 16)
 
     def _show_context_menu(self, global_pos: QPoint):
-        """Context menu for camera switching, shape, size, mirror."""
+        """Context menu for camera switching, shape, size presets, mirror."""
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
@@ -257,11 +320,11 @@ class WebcamPiPOverlay(QWidget):
             act.triggered.connect(lambda checked, s=shp: self.set_shape(s))
 
         # Size submenu
-        size_menu = menu.addMenu("📏 PiP Size")
-        for sz, lbl in [(160, "Small (160px)"), (220, "Medium (220px)"), (280, "Large (280px)"), (340, "Extra Large (340px)")]:
+        size_menu = menu.addMenu("📏 PiP Size Presets")
+        for sz, lbl in [(140, "Compact (140px)"), (220, "Medium (220px)"), (300, "Large (300px)"), (400, "Extra Large (400px)"), (500, "Jumbo (500px)")]:
             act = size_menu.addAction(lbl)
             act.setCheckable(True)
-            act.setChecked(abs(self.pip_size - sz) < 20)
+            act.setChecked(abs(self.pip_size - sz) < 25)
             act.triggered.connect(lambda checked, s=sz: self.set_size(s))
 
         # Mirror toggle
@@ -288,7 +351,7 @@ class WebcamPiPOverlay(QWidget):
         if self.shape_type == "circle":
             path.addEllipse(0, 0, self.pip_size, self.pip_size)
         elif self.shape_type == "rounded":
-            path.addRoundedRect(0, 0, self.pip_size, self.pip_size, 24, 24)
+            path.addRoundedRect(0, 0, self.pip_size, self.pip_size, 26, 26)
         else:
             path.addRoundedRect(0, 0, self.pip_size, self.pip_size, 8, 8)
 
@@ -312,12 +375,25 @@ class WebcamPiPOverlay(QWidget):
 
         # Draw glowing outline border
         painter.setClipping(False)
-        border_pen = QPen(QColor("#6366F1"), 3)
+        border_color = QColor("#818CF8") if self._is_hovered else QColor("#6366F1")
+        border_pen = QPen(border_color, 3)
         painter.setPen(border_pen)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         if self.shape_type == "circle":
             painter.drawEllipse(2, 2, self.pip_size - 4, self.pip_size - 4)
         elif self.shape_type == "rounded":
-            painter.drawRoundedRect(2, 2, self.pip_size - 4, self.pip_size - 4, 24, 24)
+            painter.drawRoundedRect(2, 2, self.pip_size - 4, self.pip_size - 4, 26, 26)
         else:
             painter.drawRoundedRect(2, 2, self.pip_size - 4, self.pip_size - 4, 8, 8)
+
+        # Draw interactive resize grip indicator in bottom-right corner when hovered
+        if self._is_hovered:
+            painter.setBrush(QBrush(QColor("#818CF8")))
+            painter.setPen(Qt.PenStyle.NoPen)
+            br_x = self.pip_size - 18
+            br_y = self.pip_size - 18
+
+            # Small 3-dot diagonal grip
+            painter.drawEllipse(br_x + 8, br_y + 8, 3, 3)
+            painter.drawEllipse(br_x + 8, br_y + 2, 3, 3)
+            painter.drawEllipse(br_x + 2, br_y + 8, 3, 3)
