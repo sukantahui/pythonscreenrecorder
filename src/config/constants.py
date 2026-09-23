@@ -31,12 +31,15 @@ DEFAULT_FPS = 60
 
 # Resolution Presets
 RESOLUTION_PRESETS = {
-    "1080p (Full HD)": (1920, 1080),
-    "720p (HD)": (1280, 720),
-    "4K (UHD)": (3840, 2160),
+    "4K Ultra HD (3840x2160)": (3840, 2160),
+    "2K QHD (2560x1440)": (2560, 1440),
+    "1080p Full HD (1920x1080)": (1920, 1080),
+    "720p HD (1280x720)": (1280, 720),
+    "Native Display (Original)": None,
     "TikTok / Shorts (9:16)": (1080, 1920),
     "Square (1:1)": (1080, 1080),
 }
+DEFAULT_RESOLUTION = "4K Ultra HD (3840x2160)"
 
 # Video Codecs & Hardware Acceleration
 CODEC_H264_NVENC = "h264_nvenc"
@@ -52,13 +55,15 @@ FORMAT_MKV = "mkv"
 FORMAT_WEBM = "webm"
 FORMAT_GIF = "gif"
 
-# Quality Presets (Bitrates)
+# Quality Presets (Bitrates & CRF)
 QUALITY_PROFILES = {
-    "Ultra (20 Mbps)": {"video_bitrate": "20M", "crf": 18, "preset": "fast"},
-    "High (10 Mbps)": {"video_bitrate": "10M", "crf": 21, "preset": "medium"},
-    "Standard (5 Mbps)": {"video_bitrate": "5M", "crf": 23, "preset": "fast"},
-    "Small File (2.5 Mbps)": {"video_bitrate": "2.5M", "crf": 28, "preset": "veryfast"},
+    "4K Ultra Master (60 Mbps)": {"video_bitrate": "60M", "crf": 14, "preset": "fast"},
+    "4K High Quality (40 Mbps)": {"video_bitrate": "40M", "crf": 17, "preset": "fast"},
+    "2K QHD (25 Mbps)": {"video_bitrate": "25M", "crf": 19, "preset": "medium"},
+    "1080p High (15 Mbps)": {"video_bitrate": "15M", "crf": 21, "preset": "medium"},
+    "Standard (8 Mbps)": {"video_bitrate": "8M", "crf": 23, "preset": "fast"},
 }
+DEFAULT_QUALITY = "4K Ultra Master (60 Mbps)"
 
 # Audio Constants
 AUDIO_SAMPLE_RATE = 48000

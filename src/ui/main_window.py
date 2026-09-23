@@ -38,6 +38,10 @@ from src.config.constants import (
     MODE_REGION,
     MODE_WINDOW,
     DEFAULT_OUTPUT_DIR,
+    RESOLUTION_PRESETS,
+    QUALITY_PROFILES,
+    DEFAULT_RESOLUTION,
+    DEFAULT_QUALITY,
     COLOR_ACCENT,
     COLOR_DANGER,
 )
@@ -231,13 +235,40 @@ class MainWindow(QMainWindow):
         # Populate camera list
         self._refresh_camera_list()
 
-        # 4. Quality & FPS Quick Info Bar
-        info_row = QHBoxLayout()
-        lbl_q = QLabel(f"Quality: <b>{settings.get('quality_profile', 'High (10 Mbps)')}</b> | FPS: <b>{settings.get('fps', 60)}</b> | Codec: <b>{settings.get('encoder', 'auto').upper()}</b>")
-        lbl_q.setStyleSheet("color: #9CA3AF; font-size: 12px;")
-        info_row.addWidget(lbl_q)
-        info_row.addStretch()
-        main_layout.addLayout(info_row)
+        # 4. Resolution & Quality Quick Bar
+        info_card = QFrame(self)
+        info_card.setStyleSheet("background-color: #161820; border: 1px solid #2D313F; border-radius: 10px;")
+        info_layout = QHBoxLayout(info_card)
+        info_layout.setContentsMargins(10, 6, 10, 6)
+        info_layout.setSpacing(10)
+
+        lbl_res = QLabel("🎯 Resolution:")
+        lbl_res.setStyleSheet("color: #9CA3AF; font-size: 12px; font-weight: 500;")
+        info_layout.addWidget(lbl_res)
+
+        self.combo_main_res = QComboBox()
+        for res_name in RESOLUTION_PRESETS.keys():
+            self.combo_main_res.addItem(res_name)
+        self.combo_main_res.setCurrentText(settings.get("resolution", DEFAULT_RESOLUTION))
+        self.combo_main_res.currentIndexChanged.connect(self._on_main_res_changed)
+        info_layout.addWidget(self.combo_main_res)
+
+        lbl_q_icon = QLabel("💎 Quality:")
+        lbl_q_icon.setStyleSheet("color: #9CA3AF; font-size: 12px; font-weight: 500;")
+        info_layout.addWidget(lbl_q_icon)
+
+        self.combo_main_quality = QComboBox()
+        for prof in QUALITY_PROFILES.keys():
+            self.combo_main_quality.addItem(prof)
+        self.combo_main_quality.setCurrentText(settings.get("quality_profile", DEFAULT_QUALITY))
+        self.combo_main_quality.currentIndexChanged.connect(self._on_main_quality_changed)
+        info_layout.addWidget(self.combo_main_quality)
+
+        self.lbl_fps_info = QLabel(f"⚡ {settings.get('fps', 60)} FPS")
+        self.lbl_fps_info.setStyleSheet("color: #10B981; font-size: 12px; font-weight: bold;")
+        info_layout.addWidget(self.lbl_fps_info)
+
+        main_layout.addWidget(info_card)
 
         # 5. Primary Start Record Button
         self.btn_record = QPushButton("● START RECORDING (F9)")
@@ -528,11 +559,26 @@ class MainWindow(QMainWindow):
         self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized | Qt.WindowState.WindowActive)
         self.activateWindow()
 
+    def _on_main_res_changed(self, index: int):
+        res = self.combo_main_res.currentText()
+        settings.set("resolution", res)
+
+    def _on_main_quality_changed(self, index: int):
+        q = self.combo_main_quality.currentText()
+        settings.set("quality_profile", q)
+
     def _open_settings(self):
         dlg = SettingsDialog(self)
         if dlg.exec():
             hotkey_service.start(settings.get("hotkeys"))
             self._refresh_camera_list()
+            self.combo_main_res.blockSignals(True)
+            self.combo_main_res.setCurrentText(settings.get("resolution", DEFAULT_RESOLUTION))
+            self.combo_main_res.blockSignals(False)
+            self.combo_main_quality.blockSignals(True)
+            self.combo_main_quality.setCurrentText(settings.get("quality_profile", DEFAULT_QUALITY))
+            self.combo_main_quality.blockSignals(False)
+            self.lbl_fps_info.setText(f"⚡ {settings.get('fps', 60)} FPS")
 
     def _open_about(self):
         """Open the CNAT Credits & About Dialog."""

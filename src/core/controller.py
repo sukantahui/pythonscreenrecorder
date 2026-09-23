@@ -14,6 +14,8 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from src.config.constants import (
     DEFAULT_OUTPUT_DIR,
     DEFAULT_FPS,
+    DEFAULT_QUALITY,
+    DEFAULT_RESOLUTION,
     FORMAT_MP4,
     AUDIO_SAMPLE_RATE,
     AUDIO_CHANNELS,
@@ -90,7 +92,8 @@ class RecordingController(QObject):
 
         fps = int(settings.get("fps", DEFAULT_FPS))
         codec = settings.get("encoder", "auto")
-        quality = settings.get("quality_profile", "High (10 Mbps)")
+        quality = settings.get("quality_profile", DEFAULT_QUALITY)
+        resolution = settings.get("resolution", DEFAULT_RESOLUTION)
 
         # Initialize Video Capture Worker
         self.video_queue = queue.Queue(maxsize=120)
@@ -135,6 +138,7 @@ class RecordingController(QObject):
             quality_profile=quality,
             has_audio=has_audio,
             temp_audio_file=self.temp_audio_file if has_audio else None,
+            target_resolution=resolution,
         )
 
         if not self.ffmpeg_writer.open():

@@ -23,6 +23,9 @@ from src.config.settings_manager import settings
 from src.config.constants import (
     FPS_OPTIONS,
     QUALITY_PROFILES,
+    RESOLUTION_PRESETS,
+    DEFAULT_RESOLUTION,
+    DEFAULT_QUALITY,
     FORMAT_MP4,
     FORMAT_MKV,
     FORMAT_WEBM,
@@ -139,6 +142,11 @@ class SettingsDialog(QDialog):
         for enc in hardware_detector.get_available_encoders():
             self.combo_encoder.addItem(f"{enc.upper()} Encoder", enc)
         form.addRow("Video Encoder:", self.combo_encoder)
+
+        self.combo_resolution = QComboBox()
+        for res_name in RESOLUTION_PRESETS.keys():
+            self.combo_resolution.addItem(res_name)
+        form.addRow("Recording Resolution:", self.combo_resolution)
 
         self.combo_quality = QComboBox()
         for prof in QUALITY_PROFILES.keys():
@@ -292,7 +300,8 @@ class SettingsDialog(QDialog):
         self.txt_output_dir.setText(settings.get("output_dir"))
         self.chk_tray_minimize.setChecked(settings.get("minimize_to_tray_on_record", True))
 
-        self.combo_quality.setCurrentText(settings.get("quality_profile", "High (10 Mbps)"))
+        self.combo_resolution.setCurrentText(settings.get("resolution", DEFAULT_RESOLUTION))
+        self.combo_quality.setCurrentText(settings.get("quality_profile", DEFAULT_QUALITY))
         self.combo_format.setCurrentText(settings.get("format", FORMAT_MP4))
 
         self.chk_sys_audio.setChecked(settings.get("record_system_audio", True))
@@ -328,6 +337,7 @@ class SettingsDialog(QDialog):
         settings.set("output_dir", self.txt_output_dir.text())
         settings.set("minimize_to_tray_on_record", self.chk_tray_minimize.isChecked())
 
+        settings.set("resolution", self.combo_resolution.currentText())
         settings.set("quality_profile", self.combo_quality.currentText())
         settings.set("format", self.combo_format.currentText())
         settings.set("fps", self.combo_fps.currentData() or 60)

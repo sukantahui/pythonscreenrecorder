@@ -1,16 +1,21 @@
 """
 FFmpeg subprocess writer for real-time video encoding and audio muxing.
+Supports 4K Ultra HD resolution scaling (Lanczos/Bicubic), high-bitrate profiles,
+and hardware GPU acceleration with automatic CPU fallback.
 """
 
 import subprocess
 import os
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from src.core.hardware_detect import get_ffmpeg_binary, hardware_detector
 from src.config.constants import (
     AUDIO_SAMPLE_RATE,
     AUDIO_CHANNELS,
     QUALITY_PROFILES,
+    RESOLUTION_PRESETS,
+    DEFAULT_QUALITY,
+    DEFAULT_RESOLUTION,
     FORMAT_MP4,
 )
 
@@ -25,9 +30,10 @@ class FFmpegWriter:
         height: int,
         fps: int = 60,
         codec: str = "auto",
-        quality_profile: str = "High (10 Mbps)",
+        quality_profile: str = DEFAULT_QUALITY,
         has_audio: bool = False,
         temp_audio_file: Optional[str] = None,
+        target_resolution: Optional[str] = DEFAULT_RESOLUTION,
     ):
         self.output_filepath = output_filepath
         self.width = width
@@ -37,23 +43,44 @@ class FFmpegWriter:
         self.quality_profile = quality_profile
         self.has_audio = has_audio
         self.temp_audio_file = temp_audio_file
+        self.target_resolution = target_resolution
 
         self.ffmpeg_path = get_ffmpeg_binary()
         self.process: Optional[subprocess.Popen] = None
         self._is_open = False
         self.intermediate_video: Optional[str] = None
 
-    def _resolve_codec(self) -> str:
+    def _resolve_target_dimensions(self) -> Tuple[int, int]:
+        """Resolve output scaling dimensions."""
+        if not self.target_resolution or self.target_resolution == "Native Display (Original)":
+            return (self.width, self.height)
+
+        preset = RESOLUTION_PRESETS.get(self.target_resolution)
+        if preset and isinstance(preset, (tuple, list)):
+            return (preset[0], preset[1])
+
+        return (self.width, self.height)
+
+    def _resolve_codec(self, target_w: int, target_h: int) -> str:
         """Resolve auto codec to best working hardware encoder or CPU fallback."""
+        if target_w > 1920 or target_h > 1080:
+            # NVENC supports 4K/8K natively on Nvidia.
+            # On AMD/Intel without verified 4K profile, use multithreaded libx264 for flawless 4K output.
+            best = hardware_detector.get_best_h264_encoder()
+            if "nvenc" in best:
+                return best
+            return "libx264"
+
         if self.codec == "auto" or not self.codec:
             return hardware_detector.get_best_h264_encoder()
         return self.codec
 
     def open(self) -> bool:
         """Start the FFmpeg encoding subprocess."""
-        selected_codec = self._resolve_codec()
+        target_w, target_h = self._resolve_target_dimensions()
+        selected_codec = self._resolve_codec(target_w, target_h)
         profile_settings = QUALITY_PROFILES.get(
-            self.quality_profile, QUALITY_PROFILES["High (10 Mbps)"]
+            self.quality_profile, QUALITY_PROFILES.get(DEFAULT_QUALITY, {"video_bitrate": "60M", "crf": 14, "preset": "fast"})
         )
 
         target_video_out = self.output_filepath
@@ -71,16 +98,23 @@ class FFmpegWriter:
                 "-s", f"{self.width}x{self.height}",
                 "-r", str(self.fps),
                 "-i", "-",
-                "-c:v", codec_name,
             ]
+
+            # High Quality 4K Scale filter if scaling is needed
+            if target_w != self.width or target_h != self.height:
+                cmd.extend(["-vf", f"scale={target_w}:{target_h}:flags=lanczos"])
+
+            cmd.extend(["-c:v", codec_name])
+
             if "nvenc" in codec_name:
                 cmd.extend(["-preset", "p4", "-rc", "vbr", "-cq", str(profile_settings["crf"]), "-b:v", profile_settings["video_bitrate"]])
             elif "qsv" in codec_name:
                 cmd.extend(["-preset", "medium", "-global_quality", str(profile_settings["crf"])])
             elif "amf" in codec_name:
-                cmd.extend(["-quality", "balanced", "-b:v", profile_settings["video_bitrate"]])
+                cmd.extend(["-quality", "quality", "-b:v", profile_settings["video_bitrate"]])
             else:
-                cmd.extend(["-preset", "ultrafast", "-crf", str(profile_settings["crf"]), "-tune", "zerolatency"])
+                # High-performance multithreaded libx264
+                cmd.extend(["-preset", "ultrafast", "-crf", str(profile_settings["crf"]), "-tune", "zerolatency", "-threads", "0"])
 
             cmd.extend(["-pix_fmt", "yuv420p"])
 
@@ -92,7 +126,7 @@ class FFmpegWriter:
 
         creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
-        # Try with selected codec
+        # Try launching with primary codec
         cmd = build_cmd(selected_codec)
         try:
             self.process = subprocess.Popen(
@@ -103,27 +137,38 @@ class FFmpegWriter:
                 creationflags=creationflags,
                 bufsize=10**7,
             )
-            self._is_open = True
-            return True
-        except Exception as e:
-            print(f"[FFmpegWriter] Error with {selected_codec}: {e}, falling back to libx264")
-            # Fallback to CPU libx264
-            cmd = build_cmd("libx264")
-            try:
-                self.process = subprocess.Popen(
-                    cmd,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    creationflags=creationflags,
-                    bufsize=10**7,
-                )
+            time.sleep(0.04)
+            if self.process.poll() is None:
                 self._is_open = True
                 return True
-            except Exception as e2:
-                print(f"[FFmpegWriter] Fallback to libx264 failed: {e2}")
+            else:
+                print(f"[FFmpegWriter] Codec {selected_codec} exited immediately, falling back to libx264")
+        except Exception as e:
+            print(f"[FFmpegWriter] Error with {selected_codec}: {e}, falling back to libx264")
+
+        # Fallback to CPU libx264
+        cmd = build_cmd("libx264")
+        try:
+            self.process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=creationflags,
+                bufsize=10**7,
+            )
+            time.sleep(0.03)
+            if self.process.poll() is None:
+                self._is_open = True
+                return True
+            else:
+                print(f"[FFmpegWriter] Fallback libx264 exited with code {self.process.poll()}")
                 self._is_open = False
                 return False
+        except Exception as e2:
+            print(f"[FFmpegWriter] Fallback to libx264 failed: {e2}")
+            self._is_open = False
+            return False
 
     def write_frame(self, frame_bytes: bytes) -> bool:
         """Send a raw BGR24 frame to FFmpeg stdin."""
@@ -152,7 +197,7 @@ class FFmpegWriter:
                     self.process.stdin.close()
                 except Exception:
                     pass
-            self.process.wait(timeout=5)
+            self.process.wait(timeout=10)
         except Exception:
             try:
                 self.process.kill()

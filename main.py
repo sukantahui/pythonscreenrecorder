@@ -11,8 +11,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Windows High-DPI handling is managed natively by Qt6
-# os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
+# Windows High-DPI handling is managed natively by Qt6 (Per-Monitor Aware V2)
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
