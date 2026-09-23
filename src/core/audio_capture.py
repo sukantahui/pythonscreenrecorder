@@ -149,24 +149,33 @@ class AudioCaptureWorker:
 
     @classmethod
     def get_preferred_mic_device(cls, prefer_iriun: bool = True) -> Optional[int]:
-        """Find the preferred default microphone device, prioritizing Iriun Webcam."""
+        """Find the preferred default microphone device, prioritizing dedicated mic (JBL Commercial CSUM10) or Iriun Webcam."""
         devices = cls.get_audio_devices().get("microphones", [])
         if not devices:
             return None
 
+        # 1. Search for dedicated mic (JBL / Commercial / CSUM10) on WASAPI or MME
+        for dev in devices:
+            name = dev["name"].lower()
+            if any(k in name for k in ("jbl", "csum10", "commercial")) and "wasapi" in dev.get("api", "").lower():
+                return dev["id"]
+        for dev in devices:
+            name = dev["name"].lower()
+            if any(k in name for k in ("jbl", "csum10", "commercial")):
+                return dev["id"]
+
+        # 2. Search for Iriun on WASAPI
         if prefer_iriun:
-            # 1. Search for Iriun on WASAPI
             for dev in devices:
                 name = dev["name"].lower()
                 if any(k in name for k in ("iriun", "irium")) and "wasapi" in dev.get("api", "").lower():
                     return dev["id"]
-            # 2. Search for Iriun on any host API
             for dev in devices:
                 name = dev["name"].lower()
                 if any(k in name for k in ("iriun", "irium")):
                     return dev["id"]
 
-        # Fallback to system default input
+        # 3. Fallback to system default input
         try:
             default_in = sd.default.device[0]
             if default_in is not None and default_in >= 0:

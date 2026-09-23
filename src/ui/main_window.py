@@ -459,17 +459,21 @@ class MainWindow(QMainWindow):
             self.combo_cam_dev.setCurrentIndex(selected_idx)
             settings.set("webcam_device_id", self.combo_cam_dev.currentData())
             settings.set("webcam_device_name", self.combo_cam_dev.currentText())
+            if hasattr(self, "chk_cam"):
+                self.chk_cam.blockSignals(True)
+                self.chk_cam.setChecked(settings.get("webcam_enabled", True))
+                self.chk_cam.blockSignals(False)
 
         self.combo_cam_dev.blockSignals(False)
 
-        # Set saved shape
+        # Set saved shape (defaults to Circle Bubble)
         saved_shape = settings.get("webcam_shape", "circle")
         shape_idx = self.combo_cam_shape.findData(saved_shape)
         if shape_idx >= 0:
             self.combo_cam_shape.setCurrentIndex(shape_idx)
 
     def _refresh_audio_devices(self):
-        """Populate available microphone & webcam audio devices into dropdown, prioritizing Iriun Webcam."""
+        """Populate available microphone & webcam audio devices into dropdown, prioritizing JBL Commercial & Iriun."""
         self.combo_mic_source.blockSignals(True)
         self.combo_mic_source.clear()
 
@@ -509,6 +513,11 @@ class MainWindow(QMainWindow):
         self.combo_mic_source.setCurrentIndex(selected_idx)
         chosen_mic_id = self.combo_mic_source.currentData()
         settings.set("mic_device_id", chosen_mic_id)
+
+        if hasattr(self, "chk_mic"):
+            self.chk_mic.blockSignals(True)
+            self.chk_mic.setChecked(settings.get("record_microphone", True) and len(mics) > 0)
+            self.chk_mic.blockSignals(False)
 
         # Auto-match webcam audio device ID
         cam_name = self.combo_cam_dev.currentText() if hasattr(self, "combo_cam_dev") else "Iriun Webcam"
