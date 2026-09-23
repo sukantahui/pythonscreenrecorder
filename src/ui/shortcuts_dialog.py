@@ -52,11 +52,12 @@ class ShortcutsDialog(QDialog):
             ("F10", "Pause / Resume Recording", "#F59E0B"),
             ("F8", "Toggle Drawing & Annotations Canvas", "#6366F1"),
             ("F7", "Toggle Webcam PiP (Picture-in-Picture)", "#818CF8"),
+            ("F4", "Toggle Fullscreen Presenter Cam Mode", "#F43F5E"),
             ("F6", "Mute / Unmute Microphone", "#10B981"),
             ("F11", "Take Instant HD Screenshot", "#3B82F6"),
             ("Mouse Wheel", "Resize Webcam PiP dynamically", "#EC4899"),
-            ("Right Click Cam", "Open Webcam Shape, Size & Mirror Menu", "#A855F7"),
-            ("Esc", "Exit Region Selection / Clear Annotations", "#6B7280"),
+            ("Right Click Cam", "Open Webcam Sizing & Framing Menu", "#A855F7"),
+            ("Esc", "Restore PiP Mode / Exit Selection", "#6B7280"),
         ]
 
         for row, (key_combo, description, color) in enumerate(shortcuts):

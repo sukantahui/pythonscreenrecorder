@@ -16,6 +16,7 @@ from src.config.constants import (
     HOTKEY_PAUSE,
     HOTKEY_ANNOTATE,
     HOTKEY_WEBCAM,
+    HOTKEY_WEBCAM_FULLSCREEN,
     HOTKEY_MIC_MUTE,
     HOTKEY_SCREENSHOT,
 )
@@ -56,6 +57,7 @@ class SettingsManager:
             "pause_resume": HOTKEY_PAUSE,
             "annotate": HOTKEY_ANNOTATE,
             "toggle_webcam": HOTKEY_WEBCAM,
+            "toggle_webcam_fullscreen": HOTKEY_WEBCAM_FULLSCREEN,
             "mute_mic": HOTKEY_MIC_MUTE,
             "screenshot": HOTKEY_SCREENSHOT,
         },

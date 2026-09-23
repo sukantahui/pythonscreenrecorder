@@ -300,11 +300,17 @@ class MainWindow(QMainWindow):
         self.chk_cam.toggled.connect(self._on_webcam_toggled)
         cam_top_row.addWidget(self.chk_cam)
 
-        self.btn_preview_cam = QPushButton("👁️ Preview")
+        self.btn_preview_cam = QPushButton("👁️ PiP")
         self.btn_preview_cam.setProperty("class", "SmallBtn")
-        self.btn_preview_cam.setToolTip("Test webcam video preview on screen")
+        self.btn_preview_cam.setToolTip("Test webcam floating PiP on screen")
         self.btn_preview_cam.clicked.connect(self._toggle_webcam_preview)
         cam_top_row.addWidget(self.btn_preview_cam)
+
+        self.btn_preview_full_cam = QPushButton("⛶ Full")
+        self.btn_preview_full_cam.setProperty("class", "SmallBtn")
+        self.btn_preview_full_cam.setToolTip("Test Fullscreen / Region Presenter Cam Mode")
+        self.btn_preview_full_cam.clicked.connect(self._toggle_webcam_full_preview)
+        cam_top_row.addWidget(self.btn_preview_full_cam)
         cam_layout.addLayout(cam_top_row)
 
         # Camera Device Dropdown
@@ -576,64 +582,124 @@ class MainWindow(QMainWindow):
             self.combo_cam_shape.setCurrentIndex(idx)
             self.combo_cam_shape.blockSignals(False)
 
+    def _create_webcam_overlay(self) -> WebcamPiPOverlay:
+        """Create and configure a WebcamPiPOverlay instance with active settings and bindings."""
+        dev_id = self.combo_cam_dev.currentData() if self.combo_cam_dev.count() > 0 else settings.get("webcam_device_id", 0)
+        shape = self.combo_cam_shape.currentData() or settings.get("webcam_shape", "wide")
+        size = settings.get("webcam_size", 220)
+        mirrored = settings.get("webcam_mirrored", True)
+        filter_name = settings.get("webcam_filter", "normal")
+        border_theme = settings.get("webcam_border_color", "indigo")
+
+        overlay = WebcamPiPOverlay(
+            device_id=dev_id,
+            shape=shape,
+            size=size,
+            mirrored=mirrored,
+            filter_name=filter_name,
+            border_theme=border_theme,
+        )
+        overlay.shape_changed.connect(self._sync_webcam_shape_ui)
+        overlay.mode_changed.connect(self.floating_bar.update_webcam_mode)
+        overlay.mode_changed.connect(self._on_webcam_mode_changed)
+        overlay.closed.connect(self._on_webcam_overlay_closed)
+        overlay.set_recording_region(self.selected_region)
+        return overlay
+
     def _on_webcam_overlay_closed(self):
         """Handle webcam overlay closed event."""
         self._previewing_cam = False
-        self.btn_preview_cam.setText("👁️ Preview")
+        self.btn_preview_cam.setText("👁️ PiP")
+        if hasattr(self, "btn_preview_full_cam"):
+            self.btn_preview_full_cam.setText("⛶ Full")
+        self.floating_bar.update_webcam_mode(False)
+
+    def _on_webcam_mode_changed(self, is_fullscreen: bool):
+        """Handle webcam overlay switching between PiP and Fullscreen presenter mode."""
+        if hasattr(self, "btn_preview_full_cam"):
+            self.btn_preview_full_cam.setText("🗗 PiP" if is_fullscreen else "⛶ Full")
+        status_msg = "Presenter Mode (Covering Recording Area)" if is_fullscreen else "Floating PiP Mode"
+        self.tray_service.show_notification(APP_NAME, f"📷 Webcam: {status_msg}")
 
     def _toggle_webcam_preview(self):
-        """Toggle live on-screen webcam preview."""
+        """Toggle live on-screen floating PiP preview."""
         if self.webcam_overlay and self.webcam_overlay.isVisible():
+            if self.webcam_overlay.is_fullscreen_cam:
+                self.webcam_overlay.toggle_fullscreen_cam()
+                self.btn_preview_cam.setText("❌ Close PiP")
+                if hasattr(self, "btn_preview_full_cam"):
+                    self.btn_preview_full_cam.setText("⛶ Full")
+            else:
+                self.webcam_overlay.stop()
+                self.webcam_overlay = None
+                self._previewing_cam = False
+                self.btn_preview_cam.setText("👁️ PiP")
+                if hasattr(self, "btn_preview_full_cam"):
+                    self.btn_preview_full_cam.setText("⛶ Full")
+        else:
+            self.webcam_overlay = self._create_webcam_overlay()
+            self.webcam_overlay.start_webcam()
+            self._previewing_cam = True
+            self.btn_preview_cam.setText("❌ Close PiP")
+
+    def _toggle_webcam_full_preview(self):
+        """Toggle live fullscreen/region presenter cam preview."""
+        if self.webcam_overlay and self.webcam_overlay.isVisible() and self.webcam_overlay.is_fullscreen_cam:
             self.webcam_overlay.stop()
             self.webcam_overlay = None
             self._previewing_cam = False
-            self.btn_preview_cam.setText("👁️ Preview")
+            self.btn_preview_cam.setText("👁️ PiP")
+            self.btn_preview_full_cam.setText("⛶ Full")
         else:
-            dev_id = self.combo_cam_dev.currentData() if self.combo_cam_dev.count() > 0 else 0
-            shape = self.combo_cam_shape.currentData() or "wide"
-            size = settings.get("webcam_size", 220)
-            mirrored = settings.get("webcam_mirrored", True)
-            filter_name = settings.get("webcam_filter", "normal")
-            border_theme = settings.get("webcam_border_color", "indigo")
-
-            self.webcam_overlay = WebcamPiPOverlay(
-                device_id=dev_id,
-                shape=shape,
-                size=size,
-                mirrored=mirrored,
-                filter_name=filter_name,
-                border_theme=border_theme,
-            )
-            self.webcam_overlay.shape_changed.connect(self._sync_webcam_shape_ui)
-            self.webcam_overlay.closed.connect(self._on_webcam_overlay_closed)
-            self.webcam_overlay.start_webcam()
+            if not self.webcam_overlay or not self.webcam_overlay.isVisible():
+                self.webcam_overlay = self._create_webcam_overlay()
+                self.webcam_overlay.start_webcam()
+            if not self.webcam_overlay.is_fullscreen_cam:
+                self.webcam_overlay.toggle_fullscreen_cam(self.selected_region)
             self._previewing_cam = True
-            self.btn_preview_cam.setText("❌ Close Cam")
+            self.btn_preview_cam.setText("❌ Close PiP")
+            self.btn_preview_full_cam.setText("❌ Close Full")
 
     def _toggle_webcam_pip(self):
-        """Toggle webcam overlay during recording from floating bar."""
+        """Toggle webcam overlay during recording from floating bar or hotkey."""
         if self.webcam_overlay and self.webcam_overlay.isVisible():
             self.webcam_overlay.stop()
             self.webcam_overlay = None
         else:
-            dev_id = settings.get("webcam_device_id", 0)
-            shape = settings.get("webcam_shape", "wide")
-            size = settings.get("webcam_size", 220)
-            mirrored = settings.get("webcam_mirrored", True)
-            filter_name = settings.get("webcam_filter", "normal")
-            border_theme = settings.get("webcam_border_color", "indigo")
-
-            self.webcam_overlay = WebcamPiPOverlay(
-                device_id=dev_id,
-                shape=shape,
-                size=size,
-                mirrored=mirrored,
-                filter_name=filter_name,
-                border_theme=border_theme,
-            )
-            self.webcam_overlay.shape_changed.connect(self._sync_webcam_shape_ui)
-            self.webcam_overlay.closed.connect(self._on_webcam_overlay_closed)
+            self.webcam_overlay = self._create_webcam_overlay()
             self.webcam_overlay.start_webcam()
+
+    def _toggle_webcam_fullscreen(self):
+        """Toggle Fullscreen Presenter Mode covering whole recording area / screen."""
+        if self.webcam_overlay and self.webcam_overlay.isVisible():
+            self.webcam_overlay.toggle_fullscreen_cam(self.selected_region)
+        else:
+            self.webcam_overlay = self._create_webcam_overlay()
+            self.webcam_overlay.start_webcam()
+            self.webcam_overlay.toggle_fullscreen_cam(self.selected_region)
+
+    def _on_webcam_size_requested(self, size: int):
+        """Handle dynamic webcam resizing mid-recording from toolbar or menu."""
+        settings.set("webcam_size", size)
+        if self.webcam_overlay:
+            if self.webcam_overlay.is_fullscreen_cam:
+                self.webcam_overlay.toggle_fullscreen_cam()
+            self.webcam_overlay.set_size(size)
+
+    def _on_camera_shape_changed_from_bar(self, shape: str):
+        """Handle framing shape change from floating bar."""
+        settings.set("webcam_shape", shape)
+        if self.webcam_overlay:
+            if self.webcam_overlay.is_fullscreen_cam:
+                self.webcam_overlay.toggle_fullscreen_cam()
+            self.webcam_overlay.set_shape(shape)
+        self._sync_webcam_shape_ui(shape)
+
+    def _on_webcam_filter_changed_from_bar(self, filter_name: str):
+        """Handle studio filter change from floating bar."""
+        settings.set("webcam_filter", filter_name)
+        if self.webcam_overlay:
+            self.webcam_overlay.set_filter(filter_name)
 
     def _connect_signals(self):
         # Controller Signals
@@ -658,6 +724,10 @@ class MainWindow(QMainWindow):
         self.floating_bar.stop_clicked.connect(controller.stop_recording)
         self.floating_bar.annotate_clicked.connect(self._toggle_annotations)
         self.floating_bar.toggle_webcam_clicked.connect(self._toggle_webcam_pip)
+        self.floating_bar.toggle_webcam_fullscreen_clicked.connect(self._toggle_webcam_fullscreen)
+        self.floating_bar.webcam_size_changed.connect(self._on_webcam_size_requested)
+        self.floating_bar.webcam_shape_changed.connect(self._on_camera_shape_changed_from_bar)
+        self.floating_bar.webcam_filter_changed.connect(self._on_webcam_filter_changed_from_bar)
         self.floating_bar.screenshot_clicked.connect(self._take_screenshot)
         self.floating_bar.restore_main_clicked.connect(self._restore_main_window)
 
@@ -666,6 +736,7 @@ class MainWindow(QMainWindow):
         hotkey_service.pause_resume_triggered.connect(self._toggle_pause)
         hotkey_service.annotate_triggered.connect(self._toggle_annotations)
         hotkey_service.toggle_webcam_triggered.connect(self._toggle_webcam_pip)
+        hotkey_service.toggle_webcam_fullscreen_triggered.connect(self._toggle_webcam_fullscreen)
         hotkey_service.mute_mic_triggered.connect(self._toggle_mute_mic)
         hotkey_service.screenshot_triggered.connect(self._take_screenshot)
 
@@ -696,6 +767,8 @@ class MainWindow(QMainWindow):
                 self.region_selector.activateWindow()
         else:
             self.selected_region = None
+            if self.webcam_overlay:
+                self.webcam_overlay.set_recording_region(None)
             for btn in self.preset_chips.values():
                 btn.blockSignals(True)
                 btn.setChecked(False)
@@ -716,6 +789,9 @@ class MainWindow(QMainWindow):
 
     def _on_region_selected(self, region: dict):
         self.selected_region = region
+        if self.webcam_overlay:
+            self.webcam_overlay.set_recording_region(region)
+
         ratio_key = region.get("ratio_key", "freeform")
         ratio_label = region.get("ratio_label", "")
 
@@ -771,30 +847,18 @@ class MainWindow(QMainWindow):
 
         if self.chk_cam.isChecked():
             if not self.webcam_overlay or not self.webcam_overlay.isVisible():
-                dev_id = self.combo_cam_dev.currentData() if self.combo_cam_dev.count() > 0 else 0
-                shape = self.combo_cam_shape.currentData() or "wide"
-                size = settings.get("webcam_size", 220)
-                mirrored = settings.get("webcam_mirrored", True)
-                filter_name = settings.get("webcam_filter", "normal")
-                border_theme = settings.get("webcam_border_color", "indigo")
-
-                self.webcam_overlay = WebcamPiPOverlay(
-                    device_id=dev_id,
-                    shape=shape,
-                    size=size,
-                    mirrored=mirrored,
-                    filter_name=filter_name,
-                    border_theme=border_theme,
-                )
-                self.webcam_overlay.shape_changed.connect(self._sync_webcam_shape_ui)
-                self.webcam_overlay.closed.connect(self._on_webcam_overlay_closed)
+                self.webcam_overlay = self._create_webcam_overlay()
                 self.webcam_overlay.start_webcam()
+            else:
+                self.webcam_overlay.set_recording_region(self.selected_region)
 
         # Start controller
         if controller.start_recording(region=self.selected_region):
             if settings.get("minimize_to_tray_on_record", True):
                 self.hide()
             self.floating_bar.show()
+            if self.webcam_overlay:
+                self.floating_bar.update_webcam_mode(self.webcam_overlay.is_fullscreen_cam)
             self.tray_service.set_recording_state(True)
             self.tray_service.show_notification(APP_NAME, "Recording started!")
 

@@ -16,6 +16,7 @@ class HotkeyService(QObject):
     pause_resume_triggered = pyqtSignal()
     annotate_triggered = pyqtSignal()
     toggle_webcam_triggered = pyqtSignal()
+    toggle_webcam_fullscreen_triggered = pyqtSignal()
     mute_mic_triggered = pyqtSignal()
     screenshot_triggered = pyqtSignal()
 
@@ -33,6 +34,7 @@ class HotkeyService(QObject):
                 "pause_resume": "F10",
                 "annotate": "F8",
                 "toggle_webcam": "F7",
+                "toggle_webcam_fullscreen": "F4",
                 "mute_mic": "F6",
                 "screenshot": "F11",
             }
@@ -55,6 +57,8 @@ class HotkeyService(QObject):
             bindings[to_pynput_str(hotkeys_map["annotate"])] = self.annotate_triggered.emit
         if "toggle_webcam" in hotkeys_map and hotkeys_map["toggle_webcam"]:
             bindings[to_pynput_str(hotkeys_map["toggle_webcam"])] = self.toggle_webcam_triggered.emit
+        if "toggle_webcam_fullscreen" in hotkeys_map and hotkeys_map["toggle_webcam_fullscreen"]:
+            bindings[to_pynput_str(hotkeys_map["toggle_webcam_fullscreen"])] = self.toggle_webcam_fullscreen_triggered.emit
         if "mute_mic" in hotkeys_map and hotkeys_map["mute_mic"]:
             bindings[to_pynput_str(hotkeys_map["mute_mic"])] = self.mute_mic_triggered.emit
         if "screenshot" in hotkeys_map and hotkeys_map["screenshot"]:
