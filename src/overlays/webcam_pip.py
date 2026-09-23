@@ -723,7 +723,7 @@ class WebcamPiPOverlay(QWidget):
                 painter.drawEllipse(br_x + 8, br_y + 2, 3, 3)
                 painter.drawEllipse(br_x + 2, br_y + 8, 3, 3)
 
-            # Frosted Action Pill Toolbar at top center
+            # Frosted Action Pill Toolbar at top center (placed high at top edge to keep face/eyes clear)
             if self.is_fullscreen_cam:
                 actions = [
                     ("mode", "🗗", "Restore PiP (Esc)"),
@@ -731,7 +731,10 @@ class WebcamPiPOverlay(QWidget):
                     ("mirror", "🪞", "Flip Mirror"),
                     ("close", "✕", "Hide Cam"),
                 ]
-                pill_w = 150
+                btn_w = 30
+                pill_h = 24
+                pill_y = 6
+                font_size = 9
             else:
                 actions = [
                     ("mode", "⛶", "Full Recording Area"),
@@ -741,31 +744,32 @@ class WebcamPiPOverlay(QWidget):
                     ("snap", "📍", "Dock Corner"),
                     ("close", "✕", "Close"),
                 ]
-                pill_w = 210
+                btn_w = 26
+                pill_h = 22
+                pill_y = 2 if self.shape_type == "circle" else 3
+                font_size = 9
 
-            pill_h = 28
+            pill_w = len(actions) * btn_w + 10
             pill_x = (w - pill_w) // 2
-            pill_y = 10
 
             pill_rect = QRect(pill_x, pill_y, pill_w, pill_h)
-            painter.setBrush(QBrush(QColor(16, 18, 24, 230)))
-            painter.setPen(QPen(QColor(63, 68, 88, 220), 1))
-            painter.drawRoundedRect(pill_rect, 14, 14)
+            painter.setBrush(QBrush(QColor(16, 18, 24, 235)))
+            painter.setPen(QPen(QColor(63, 68, 88, 200), 1))
+            painter.drawRoundedRect(pill_rect, pill_h // 2, pill_h // 2)
 
-            btn_w = 32
-            painter.setFont(QFont("Segoe UI Emoji", 10))
+            painter.setFont(QFont("Segoe UI Emoji", font_size))
             self._action_rects.clear()
 
             for i, (act_key, icon, _) in enumerate(actions):
-                btn_x = pill_x + 8 + (i * btn_w)
-                btn_rect = QRect(btn_x, pill_y + 2, btn_w, pill_h - 4)
+                btn_x = pill_x + 5 + (i * btn_w)
+                btn_rect = QRect(btn_x, pill_y + 1, btn_w, pill_h - 2)
                 self._action_rects[act_key] = btn_rect
 
                 mouse_p = self.mapFromGlobal(QCursor.pos())
                 if btn_rect.contains(mouse_p):
                     painter.setBrush(QBrush(QColor(99, 102, 241, 180)))
                     painter.setPen(Qt.PenStyle.NoPen)
-                    painter.drawRoundedRect(btn_rect, 6, 6)
+                    painter.drawRoundedRect(btn_rect, 4, 4)
 
                 painter.setPen(QColor("#F9FAFB"))
                 painter.drawText(btn_rect, Qt.AlignmentFlag.AlignCenter, icon)

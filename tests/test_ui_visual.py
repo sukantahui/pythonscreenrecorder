@@ -42,8 +42,20 @@ def capture_ui():
     bar_pix2.save("tests/test_output/floating_bar_presenter_active_ui.png")
     print("[UI Test] Saved floating bar active fullscreen cam screenshot.")
 
+    # 4. Test WebcamPiPOverlay Circle Hover
+    from src.overlays.webcam_pip import WebcamPiPOverlay
+    overlay = WebcamPiPOverlay(shape="circle", size=220)
+    overlay._is_hovered = True
+    overlay.show()
+    app.processEvents()
+
+    cam_pix = overlay.grab()
+    cam_pix.save("tests/test_output/webcam_pip_circle_hover_ui.png")
+    print("[UI Test] Saved webcam circle hover screenshot.")
+
     win.close()
     bar.close()
+    overlay.close()
 
 if __name__ == "__main__":
     capture_ui()
