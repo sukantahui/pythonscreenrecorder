@@ -54,6 +54,9 @@ class RecordingController(QObject):
         self._pause_start = 0.0
         self._is_recording = False
         self._is_paused = False
+        self._start_time: float = 0.0
+        self._stop_time: Optional[float] = None
+        self._elapsed_offset: float = 0.0
 
         self._timer_thread: Optional[threading.Thread] = None
         self._writer_thread: Optional[threading.Thread] = None
@@ -117,8 +120,31 @@ class RecordingController(QObject):
 
         has_audio = rec_sys or rec_mic or (rec_webcam_audio and webcam_audio_id is not None)
 
+        # Initialize FFmpeg Writer FIRST so the encoder process is spun up and ready
+        self.ffmpeg_writer = FFmpegWriter(
+            output_filepath=self.current_output_file,
+            width=self.video_worker.width,
+            height=self.video_worker.height,
+            fps=fps,
+            codec=codec,
+            quality_profile=quality,
+            has_audio=has_audio,
+            temp_audio_file=self.temp_audio_file if has_audio else None,
+            target_resolution=resolution,
+        )
+
+        if not self.ffmpeg_writer.open():
+            self.error_occurred.emit("Failed to initialize video encoder.")
+            self._cleanup()
+            return False
+
+        # Unified start timestamp
+        self._start_time = time.perf_counter()
+        self._stop_time = None
+        self._elapsed_offset = 0.0
+
         if has_audio:
-            self.audio_queue = queue.Queue(maxsize=200)
+            self.audio_queue = queue.Queue(maxsize=300)
             self.audio_worker = AudioCaptureWorker(
                 audio_queue=self.audio_queue,
                 record_system_audio=rec_sys,
@@ -138,36 +164,18 @@ class RecordingController(QObject):
             )
             self._audio_writer_thread.start()
             self.audio_worker.start()
+            self.audio_worker.start_recording(self._start_time)
 
-        # Initialize FFmpeg Writer
-        self.ffmpeg_writer = FFmpegWriter(
-            output_filepath=self.current_output_file,
-            width=self.video_worker.width,
-            height=self.video_worker.height,
-            fps=fps,
-            codec=codec,
-            quality_profile=quality,
-            has_audio=has_audio,
-            temp_audio_file=self.temp_audio_file if has_audio else None,
-            target_resolution=resolution,
-        )
+        # Start Video Capture Worker with synchronized start time
+        self.video_worker.start_recording(self._start_time)
 
-        if not self.ffmpeg_writer.open():
-            self.error_occurred.emit("Failed to initialize video encoder.")
-            self._cleanup()
-            return False
-
-        # Start Video Capture Worker
-        self.video_worker.start()
-
-        # Start Video Frame Consumer Thread
+        # Start Video Frame Consumer Thread with CFR pacing
         self._writer_thread = threading.Thread(
             target=self._video_writer_loop, daemon=True, name="VideoFrameWriter"
         )
         self._writer_thread.start()
 
         # Start Timer Thread
-        self._start_time = time.perf_counter()
         self._timer_thread = threading.Thread(
             target=self._timer_loop, daemon=True, name="RecordingTimer"
         )
@@ -178,17 +186,57 @@ class RecordingController(QObject):
         return True
 
     def _video_writer_loop(self):
-        """Pulls video frames from queue and feeds FFmpeg stdin."""
+        """
+        Pulls video frames from queue and feeds FFmpeg stdin with strict CFR (Constant Frame Rate)
+        timestamp pacing. Ensures video playback duration precisely matches audio recording duration.
+        """
+        target_fps = self.video_worker.target_fps
+        t0 = self._start_time
+        frames_written = 0
+        last_frame_bytes = None
+
         while self._is_recording or not self.video_queue.empty():
-            try:
-                frame_data = self.video_queue.get(timeout=0.05)
-                frame, pts = frame_data
-                if self.ffmpeg_writer:
-                    self.ffmpeg_writer.write_frame(frame.tobytes())
-            except queue.Empty:
+            if self._is_paused:
+                time.sleep(0.02)
                 continue
-            except Exception as e:
-                print(f"[RecordingController] Video write error: {e}")
+
+            # 1. Pull next captured frame from queue
+            try:
+                frame_data = self.video_queue.get(timeout=0.02)
+                frame, pts = frame_data
+                last_frame_bytes = frame.tobytes()
+                if not self.ffmpeg_writer.write_frame(last_frame_bytes):
+                    return
+                frames_written += 1
+            except queue.Empty:
+                pass
+
+            if last_frame_bytes is None:
+                continue
+
+            # 2. Check if we need to emit duplicate frames to keep pace with real elapsed time
+            now = time.perf_counter()
+            elapsed = max(0.0, now - t0 - self._elapsed_offset)
+            expected_frames = int(elapsed * target_fps)
+
+            if frames_written < expected_frames:
+                # Catch up by duplicating last valid frame to maintain strict CFR alignment
+                needed = min(expected_frames - frames_written, 10)
+                for _ in range(needed):
+                    if not self.ffmpeg_writer.write_frame(last_frame_bytes):
+                        return
+                    frames_written += 1
+
+            time.sleep(0.001)
+
+        # Pad frames up to exact final stop time if needed
+        if last_frame_bytes and self._stop_time and self._stop_time > t0:
+            final_elapsed = max(0.0, self._stop_time - t0 - self._elapsed_offset)
+            final_expected = int(final_elapsed * target_fps)
+            while frames_written < final_expected:
+                if not self.ffmpeg_writer.write_frame(last_frame_bytes):
+                    break
+                frames_written += 1
 
     def _audio_file_writer_loop(self):
         """Consumes PCM audio chunks and streams into temporary WAV file."""
@@ -261,14 +309,15 @@ class RecordingController(QObject):
         self.state_changed.emit(self.state)
         self._is_recording = False
         self._is_paused = False
+        self._stop_time = time.perf_counter()
 
-        # Stop workers
+        # Stop audio and video capture simultaneously
+        if self.audio_worker:
+            self.audio_worker.stop_recording()
+            self.audio_worker.stop()
+
         if self.video_worker:
             self.video_worker.stop()
-            self.video_worker.join(timeout=2.0)
-
-        if self.audio_worker:
-            self.audio_worker.stop()
 
         # Wait for frame queues to drain into FFmpeg
         if self._writer_thread:
@@ -277,7 +326,7 @@ class RecordingController(QObject):
         if self._audio_writer_thread:
             self._audio_writer_thread.join(timeout=3.0)
 
-        # Close FFmpeg & Remux
+        # Close FFmpeg & Remux with A/V sync
         if self.ffmpeg_writer:
             self.ffmpeg_writer.close()
 

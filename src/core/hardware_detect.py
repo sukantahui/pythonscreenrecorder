@@ -34,6 +34,7 @@ class HardwareDetector:
     def __init__(self):
         self.ffmpeg_path = get_ffmpeg_binary()
         self._working_encoders: Optional[List[str]] = None
+        self._best_h264: Optional[str] = None
 
     def _test_encoder(self, encoder_name: str) -> bool:
         """Run a 1-frame dry run to verify GPU driver/hardware supports the encoder."""
@@ -52,7 +53,7 @@ class HardwareDetector:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 creationflags=creationflags,
-                timeout=2,
+                timeout=1,
             )
             return res.returncode == 0
         except Exception:
@@ -88,15 +89,22 @@ class HardwareDetector:
 
     def get_best_h264_encoder(self) -> str:
         """Select highest performance hardware encoder available, or fallback to CPU."""
-        available = self.get_available_encoders()
-        # Priority: NVIDIA -> AMD -> Intel -> CPU
-        if "h264_nvenc" in available:
-            return "h264_nvenc"
-        if "h264_amf" in available:
-            return "h264_amf"
-        if "h264_qsv" in available:
-            return "h264_qsv"
+        if self._best_h264 is not None:
+            return self._best_h264
+
+        # Fast priority check: NVIDIA -> AMD -> Intel
+        for candidate in ("h264_nvenc", "h264_amf", "h264_qsv"):
+            if self._test_encoder(candidate):
+                self._best_h264 = candidate
+                return candidate
+
+        self._best_h264 = "libx264"
         return "libx264"
 
 
 hardware_detector = HardwareDetector()
+
+# Pre-probe hardware encoders in background thread on startup
+import threading
+threading.Thread(target=hardware_detector.get_best_h264_encoder, daemon=True, name="HWEncoderProbe").start()
+

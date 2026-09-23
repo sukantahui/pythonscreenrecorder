@@ -47,6 +47,7 @@ class AudioCaptureWorker:
 
         self._running = False
         self._paused = False
+        self._recording_active = False
 
         self._system_stream: Optional[sd.InputStream] = None
         self._mic_stream: Optional[sd.InputStream] = None
@@ -208,6 +209,14 @@ class AudioCaptureWorker:
         except queue.Full:
             pass
 
+    def start_recording(self, start_time: Optional[float] = None):
+        """Begin actively pushing audio chunks into recording queue."""
+        self._recording_active = True
+
+    def stop_recording(self):
+        """Stop pushing audio chunks into recording queue."""
+        self._recording_active = False
+
     def set_noise_reduction(self, strength: float):
         """Update noise reduction strength in real-time (0.0 to 1.0)."""
         self.noise_reduction = float(strength)
@@ -302,10 +311,11 @@ class AudioCaptureWorker:
             mixed = np.clip(mixed, -1.0, 1.0)
             pcm_bytes = (mixed * 32767).astype(np.int16).tobytes()
 
-            try:
-                self.audio_queue.put_nowait(pcm_bytes)
-            except queue.Full:
-                pass
+            if self._recording_active:
+                try:
+                    self.audio_queue.put_nowait(pcm_bytes)
+                except queue.Full:
+                    pass
 
             if self.level_callback:
                 try:

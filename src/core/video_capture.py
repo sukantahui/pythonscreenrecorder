@@ -31,6 +31,7 @@ class VideoCaptureWorker(threading.Thread):
         self._running = threading.Event()
         self._paused = threading.Event()
         self._stopped = threading.Event()
+        self._sync_start_time: Optional[float] = None
 
         # Capture geometry setup
         self.region = self._normalize_region(region)
@@ -68,6 +69,11 @@ class VideoCaptureWorker(threading.Thread):
 
         return {"left": left, "top": top, "width": width, "height": height}
 
+    def start_recording(self, start_time: Optional[float] = None):
+        """Start worker thread aligned with unified start timestamp."""
+        self._sync_start_time = start_time or time.perf_counter()
+        self.start()
+
     def run(self) -> None:
         """Main capture loop."""
         self._running.set()
@@ -80,7 +86,7 @@ class VideoCaptureWorker(threading.Thread):
             "height": self.region["height"],
         }
 
-        t_start = time.perf_counter()
+        t_start = self._sync_start_time or time.perf_counter()
         next_frame_time = t_start
         fps_calc_start = t_start
         fps_frames_count = 0
@@ -103,13 +109,13 @@ class VideoCaptureWorker(threading.Thread):
                 capture_time = time.perf_counter()
                 pts = capture_time - t_start
 
-                # Grab screenshot
+                # Grab screenshot in native 4-channel BGRA (avoids slow Python slicing)
                 frame = None
                 try:
                     sct_img = sct.grab(target_bbox)
                     frame = np.frombuffer(sct_img.raw, dtype=np.uint8).reshape(
                         (target_bbox["height"], target_bbox["width"], 4)
-                    )[:, :, :3]
+                    )
                 except Exception as mss_err:
                     # Fallback tier 1: PIL ImageGrab
                     try:
@@ -121,14 +127,18 @@ class VideoCaptureWorker(threading.Thread):
                             target_bbox["top"] + target_bbox["height"],
                         )
                         pil_img = ImageGrab.grab(bbox=bbox)
-                        frame = np.array(pil_img)[:, :, ::-1]  # RGB to BGR
+                        arr = np.array(pil_img)
+                        if arr.ndim == 3 and arr.shape[2] == 3:
+                            frame = np.dstack((arr[:, :, ::-1], np.full((target_bbox["height"], target_bbox["width"]), 255, dtype=np.uint8)))
+                        elif arr.ndim == 3 and arr.shape[2] == 4:
+                            frame = arr[:, :, [2, 1, 0, 3]]
                     except Exception:
                         # Fallback tier 2: Synthetic frame generator (for CI/headless/locked screen)
-                        frame = np.zeros((target_bbox["height"], target_bbox["width"], 3), dtype=np.uint8)
-                        # Add simple background gradient
+                        frame = np.zeros((target_bbox["height"], target_bbox["width"], 4), dtype=np.uint8)
                         frame[:, :, 0] = 32  # Dark blue-gray
                         frame[:, :, 1] = 24
                         frame[:, :, 2] = 20
+                        frame[:, :, 3] = 255
 
                 if frame is None:
                     time.sleep(0.01)
@@ -138,6 +148,8 @@ class VideoCaptureWorker(threading.Thread):
                 if self.overlay_callback:
                     try:
                         frame = self.overlay_callback(frame, target_bbox)
+                        if frame.ndim == 3 and frame.shape[2] == 3:
+                            frame = np.dstack((frame, np.full((frame.shape[0], frame.shape[1]), 255, dtype=np.uint8)))
                     except Exception:
                         pass
 

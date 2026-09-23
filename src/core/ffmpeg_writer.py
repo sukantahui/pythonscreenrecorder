@@ -94,7 +94,7 @@ class FFmpegWriter:
                 "-y",
                 "-f", "rawvideo",
                 "-vcodec", "rawvideo",
-                "-pix_fmt", "bgr24",
+                "-pix_fmt", "bgra",
                 "-s", f"{self.width}x{self.height}",
                 "-r", str(self.fps),
                 "-i", "-",
@@ -229,6 +229,8 @@ class FFmpegWriter:
                 "-c:v", "copy",
                 "-c:a", "aac",
                 "-b:a", "192k",
+                "-af", "aresample=async=1000:min_hard_comp=0.100000:first_pts=0",
+                "-shortest",
                 "-movflags", "+faststart",
                 self.output_filepath,
             ]
