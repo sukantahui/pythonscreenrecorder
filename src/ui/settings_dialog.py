@@ -21,10 +21,13 @@ from PyQt6.QtWidgets import (
 )
 from src.config.settings_manager import settings
 from src.config.constants import (
+    APP_NAME,
     FPS_OPTIONS,
     QUALITY_PROFILES,
+    DEFAULT_QUALITY,
     RESOLUTION_PRESETS,
     DEFAULT_RESOLUTION,
+    DEFAULT_OUTPUT_DIR,
     FORMAT_MP4,
     FORMAT_MKV,
     FORMAT_WEBM,
@@ -44,7 +47,7 @@ class SettingsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Apex Recorder - Settings")
+        self.setWindowTitle(f"{APP_NAME} - Settings")
         self.setFixedSize(560, 520)
         self.setModal(True)
 
@@ -384,7 +387,7 @@ class SettingsDialog(QDialog):
             self.txt_output_dir.setText(folder)
 
     def _load_values(self):
-        self.txt_output_dir.setText(settings.get("output_dir"))
+        self.txt_output_dir.setText(settings.get("output_dir", DEFAULT_OUTPUT_DIR))
         self.chk_tray_minimize.setChecked(settings.get("minimize_to_tray_on_record", True))
 
         self.combo_resolution.setCurrentText(settings.get("resolution", DEFAULT_RESOLUTION))
@@ -394,7 +397,7 @@ class SettingsDialog(QDialog):
         self.chk_sys_audio.setChecked(settings.get("record_system_audio", True))
         self.slider_sys_vol.setValue(int(settings.get("system_audio_volume", 100)))
 
-        self.chk_mic_audio.setChecked(settings.get("record_microphone", False))
+        self.chk_mic_audio.setChecked(settings.get("record_microphone", True))
         self.slider_mic_vol.setValue(int(settings.get("mic_volume", 100)))
         saved_mic_id = settings.get("mic_device_id")
         preferred_mic_id = AudioCaptureWorker.get_preferred_mic_device(prefer_iriun=True)
