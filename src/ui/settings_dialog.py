@@ -28,17 +28,18 @@ from src.config.constants import (
     FORMAT_WEBM,
 )
 from src.core.audio_capture import AudioCaptureWorker
+from src.core.camera_detect import camera_detector
 from src.core.hardware_detect import hardware_detector
 from src.services.post_processor import PostProcessor
 
 
 class SettingsDialog(QDialog):
-    """Configuration dialog for audio devices, encoders, and hotkeys."""
+    """Configuration dialog for audio devices, cameras, encoders, and hotkeys."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Apex Recorder - Settings")
-        self.setFixedSize(540, 480)
+        self.setFixedSize(560, 520)
         self.setModal(True)
 
         self._setup_ui()
@@ -56,16 +57,19 @@ class SettingsDialog(QDialog):
         self.tab_general = QWidget()
         self.tab_video = QWidget()
         self.tab_audio = QWidget()
+        self.tab_webcam_overlays = QWidget()
         self.tab_hotkeys = QWidget()
 
         self.tabs.addTab(self.tab_general, "General")
         self.tabs.addTab(self.tab_video, "Video & Codec")
-        self.tabs.addTab(self.tab_audio, "Audio & Devices")
-        self.tabs.addTab(self.tab_hotkeys, "Hotkeys & Overlays")
+        self.tabs.addTab(self.tab_audio, "Audio Devices")
+        self.tabs.addTab(self.tab_webcam_overlays, "Webcam & Overlays")
+        self.tabs.addTab(self.tab_hotkeys, "Hotkeys")
 
         self._setup_general_tab()
         self._setup_video_tab()
         self._setup_audio_tab()
+        self._setup_webcam_overlays_tab()
         self._setup_hotkeys_tab()
 
         # Bottom Action Buttons
@@ -185,6 +189,62 @@ class SettingsDialog(QDialog):
 
         layout.addStretch()
 
+    def _setup_webcam_overlays_tab(self):
+        layout = QVBoxLayout(self.tab_webcam_overlays)
+        layout.setSpacing(12)
+
+        # Webcam Device & PiP Group
+        grp_cam = QGroupBox("Webcam & Picture-in-Picture (PiP)")
+        cam_form = QFormLayout(grp_cam)
+
+        cam_dev_row = QHBoxLayout()
+        self.combo_cam_dev = QComboBox()
+        cam_dev_row.addWidget(self.combo_cam_dev, 1)
+
+        btn_refresh_cam = QPushButton("🔄")
+        btn_refresh_cam.setToolTip("Refresh connected cameras")
+        btn_refresh_cam.setFixedWidth(36)
+        btn_refresh_cam.clicked.connect(self._refresh_camera_devices)
+        cam_dev_row.addWidget(btn_refresh_cam)
+        cam_form.addRow("Camera Device:", cam_dev_row)
+
+        self.combo_cam_shape = QComboBox()
+        self.combo_cam_shape.addItem("Circle PiP", "circle")
+        self.combo_cam_shape.addItem("Rounded Square PiP", "rounded")
+        self.combo_cam_shape.addItem("Square / Rect PiP", "rect")
+        cam_form.addRow("Default Shape:", self.combo_cam_shape)
+
+        # PiP Size Slider
+        size_row = QHBoxLayout()
+        self.slider_cam_size = QSlider(Qt.Orientation.Horizontal)
+        self.slider_cam_size.setRange(120, 380)
+        self.slider_cam_size.setValue(220)
+        self.lbl_cam_size_val = QLabel("220 px")
+        self.slider_cam_size.valueChanged.connect(
+            lambda v: self.lbl_cam_size_val.setText(f"{v} px")
+        )
+        size_row.addWidget(self.slider_cam_size)
+        size_row.addWidget(self.lbl_cam_size_val)
+        cam_form.addRow("Default PiP Size:", size_row)
+
+        self.chk_cam_mirror = QCheckBox("Flip / Mirror camera feed horizontally")
+        cam_form.addRow("", self.chk_cam_mirror)
+
+        layout.addWidget(grp_cam)
+
+        # Cursor & Overlay Effects Group
+        grp_ov = QGroupBox("Cursor & Visual Effects")
+        ov_layout = QVBoxLayout(grp_ov)
+        self.chk_cursor = QCheckBox("Show Mouse Cursor in Recording")
+        ov_layout.addWidget(self.chk_cursor)
+        self.chk_ripples = QCheckBox("Show Animated Mouse Click Ripples")
+        ov_layout.addWidget(self.chk_ripples)
+        self.chk_keystrokes = QCheckBox("Show Pressed Keystrokes HUD (Keycast)")
+        ov_layout.addWidget(self.chk_keystrokes)
+        layout.addWidget(grp_ov)
+
+        layout.addStretch()
+
     def _setup_hotkeys_tab(self):
         layout = QVBoxLayout(self.tab_hotkeys)
         layout.setSpacing(12)
@@ -201,17 +261,22 @@ class SettingsDialog(QDialog):
         hk_form.addRow("Take Screenshot:", self.txt_hk_snap)
         layout.addWidget(grp_hk)
 
-        grp_ov = QGroupBox("Cursor & Overlay Effects")
-        ov_layout = QVBoxLayout(grp_ov)
-        self.chk_cursor = QCheckBox("Show Mouse Cursor in Recording")
-        ov_layout.addWidget(self.chk_cursor)
-        self.chk_ripples = QCheckBox("Show Animated Mouse Click Ripples")
-        ov_layout.addWidget(self.chk_ripples)
-        self.chk_keystrokes = QCheckBox("Show Pressed Keystrokes HUD (Keycast)")
-        ov_layout.addWidget(self.chk_keystrokes)
-        layout.addWidget(grp_ov)
-
         layout.addStretch()
+
+    def _refresh_camera_devices(self):
+        """Populate camera devices dropdown."""
+        curr_id = self.combo_cam_dev.currentData() if self.combo_cam_dev.count() > 0 else settings.get("webcam_device_id", 0)
+        self.combo_cam_dev.clear()
+
+        cameras = camera_detector.get_available_cameras()
+        select_idx = 0
+        for i, cam in enumerate(cameras):
+            self.combo_cam_dev.addItem(f"{cam['name']} (ID {cam['id']})", cam["id"])
+            if cam["id"] == curr_id:
+                select_idx = i
+
+        if self.combo_cam_dev.count() > 0:
+            self.combo_cam_dev.setCurrentIndex(select_idx)
 
     def _browse_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Output Directory", self.txt_output_dir.text())
@@ -230,6 +295,19 @@ class SettingsDialog(QDialog):
 
         self.chk_mic_audio.setChecked(settings.get("record_microphone", False))
         self.slider_mic_vol.setValue(int(settings.get("mic_volume", 100)))
+
+        # Load cameras
+        self._refresh_camera_devices()
+        shape = settings.get("webcam_shape", "circle")
+        idx = self.combo_cam_shape.findData(shape)
+        if idx >= 0:
+            self.combo_cam_shape.setCurrentIndex(idx)
+
+        size = settings.get("webcam_size", 220)
+        self.slider_cam_size.setValue(size)
+        self.lbl_cam_size_val.setText(f"{size} px")
+
+        self.chk_cam_mirror.setChecked(settings.get("webcam_mirrored", True))
 
         self.chk_cursor.setChecked(settings.get("show_cursor", True))
         self.chk_ripples.setChecked(settings.get("highlight_clicks", True))
@@ -255,6 +333,14 @@ class SettingsDialog(QDialog):
         settings.set("record_microphone", self.chk_mic_audio.isChecked())
         settings.set("mic_device_id", self.combo_mic_dev.currentData())
         settings.set("mic_volume", self.slider_mic_vol.value())
+
+        # Save Webcam Settings
+        if self.combo_cam_dev.currentData() is not None:
+            settings.set("webcam_device_id", self.combo_cam_dev.currentData())
+            settings.set("webcam_device_name", self.combo_cam_dev.currentText())
+        settings.set("webcam_shape", self.combo_cam_shape.currentData() or "circle")
+        settings.set("webcam_size", self.slider_cam_size.value())
+        settings.set("webcam_mirrored", self.chk_cam_mirror.isChecked())
 
         settings.set("show_cursor", self.chk_cursor.isChecked())
         settings.set("highlight_clicks", self.chk_ripples.isChecked())

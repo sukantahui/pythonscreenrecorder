@@ -39,6 +39,7 @@ from src.config.constants import (
 from src.config.settings_manager import settings
 from src.core.controller import controller
 from src.core.audio_capture import AudioCaptureWorker
+from src.core.camera_detect import camera_detector
 from src.overlays.region_selector import RegionSelectorOverlay
 from src.overlays.annotation_canvas import AnnotationCanvas
 from src.overlays.webcam_pip import WebcamPiPOverlay
@@ -58,10 +59,11 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
-        self.setFixedSize(760, 680)
+        self.setFixedSize(760, 700)
 
         self.selected_mode = MODE_FULLSCREEN
         self.selected_region: Optional[Dict[str, int]] = None
+        self._previewing_cam = False
 
         # Overlays & Toolbars
         self.region_selector = RegionSelectorOverlay()
@@ -177,17 +179,40 @@ class MainWindow(QMainWindow):
         self.card_cam.setProperty("class", "Card")
         cam_layout = QVBoxLayout(self.card_cam)
         cam_layout.setContentsMargins(12, 12, 12, 12)
+        cam_layout.setSpacing(6)
+
+        cam_top_row = QHBoxLayout()
         self.chk_cam = QCheckBox("📷 Webcam PiP")
         self.chk_cam.setChecked(settings.get("webcam_enabled", False))
-        self.chk_cam.toggled.connect(lambda c: settings.set("webcam_enabled", c))
-        cam_layout.addWidget(self.chk_cam)
+        self.chk_cam.toggled.connect(self._on_webcam_toggled)
+        cam_top_row.addWidget(self.chk_cam)
 
+        self.btn_preview_cam = QPushButton("👁️ Preview")
+        self.btn_preview_cam.setToolTip("Test webcam video preview on screen")
+        self.btn_preview_cam.setFixedHeight(26)
+        self.btn_preview_cam.setStyleSheet("padding: 2px 8px; font-size: 11px;")
+        self.btn_preview_cam.clicked.connect(self._toggle_webcam_preview)
+        cam_top_row.addWidget(self.btn_preview_cam)
+        cam_layout.addLayout(cam_top_row)
+
+        # Camera Device Dropdown
+        self.combo_cam_dev = QComboBox()
+        self.combo_cam_dev.currentIndexChanged.connect(self._on_camera_device_changed)
+        cam_layout.addWidget(self.combo_cam_dev)
+
+        # Shape Dropdown
         self.combo_cam_shape = QComboBox()
-        self.combo_cam_shape.addItems(["Circle PiP", "Rounded PiP", "Rect PiP"])
+        self.combo_cam_shape.addItem("Circle PiP", "circle")
+        self.combo_cam_shape.addItem("Rounded PiP", "rounded")
+        self.combo_cam_shape.addItem("Rect PiP", "rect")
+        self.combo_cam_shape.currentIndexChanged.connect(self._on_camera_shape_changed)
         cam_layout.addWidget(self.combo_cam_shape)
-        devices_row.addWidget(self.card_cam)
 
+        devices_row.addWidget(self.card_cam)
         main_layout.addLayout(devices_row)
+
+        # Populate camera list
+        self._refresh_camera_list()
 
         # 4. Quality & FPS Quick Info Bar
         info_row = QHBoxLayout()
@@ -212,6 +237,93 @@ class MainWindow(QMainWindow):
         self.list_recent.itemDoubleClicked.connect(self._on_recent_item_double_clicked)
         main_layout.addWidget(self.list_recent)
 
+    def _refresh_camera_list(self):
+        """Populate camera devices into dropdown."""
+        self.combo_cam_dev.blockSignals(True)
+        self.combo_cam_dev.clear()
+
+        cameras = camera_detector.get_available_cameras()
+        saved_id = settings.get("webcam_device_id", 0)
+        selected_idx = 0
+
+        for i, cam in enumerate(cameras):
+            self.combo_cam_dev.addItem(f"{cam['name']}", cam["id"])
+            if cam["id"] == saved_id:
+                selected_idx = i
+
+        if self.combo_cam_dev.count() > 0:
+            self.combo_cam_dev.setCurrentIndex(selected_idx)
+        self.combo_cam_dev.blockSignals(False)
+
+        # Set saved shape
+        saved_shape = settings.get("webcam_shape", "circle")
+        shape_idx = self.combo_cam_shape.findData(saved_shape)
+        if shape_idx >= 0:
+            self.combo_cam_shape.setCurrentIndex(shape_idx)
+
+    def _on_camera_device_changed(self, index: int):
+        dev_id = self.combo_cam_dev.currentData()
+        if dev_id is not None:
+            settings.set("webcam_device_id", dev_id)
+            settings.set("webcam_device_name", self.combo_cam_dev.currentText())
+            if self.webcam_overlay:
+                self.webcam_overlay.switch_device(dev_id)
+
+    def _on_camera_shape_changed(self, index: int):
+        shape = self.combo_cam_shape.currentData()
+        if shape:
+            settings.set("webcam_shape", shape)
+            if self.webcam_overlay:
+                self.webcam_overlay.set_shape(shape)
+
+    def _on_webcam_toggled(self, checked: bool):
+        settings.set("webcam_enabled", checked)
+        if not checked and self.webcam_overlay and not self._previewing_cam:
+            self.webcam_overlay.stop()
+            self.webcam_overlay = None
+
+    def _toggle_webcam_preview(self):
+        """Toggle live on-screen webcam preview."""
+        if self.webcam_overlay and self.webcam_overlay.isVisible():
+            self.webcam_overlay.stop()
+            self.webcam_overlay = None
+            self._previewing_cam = False
+            self.btn_preview_cam.setText("👁️ Preview")
+        else:
+            dev_id = self.combo_cam_dev.currentData() if self.combo_cam_dev.count() > 0 else 0
+            shape = self.combo_cam_shape.currentData() or "circle"
+            size = settings.get("webcam_size", 220)
+            mirrored = settings.get("webcam_mirrored", True)
+
+            self.webcam_overlay = WebcamPiPOverlay(
+                device_id=dev_id,
+                shape=shape,
+                size=size,
+                mirrored=mirrored
+            )
+            self.webcam_overlay.start_webcam()
+            self._previewing_cam = True
+            self.btn_preview_cam.setText("❌ Close Cam")
+
+    def _toggle_webcam_pip(self):
+        """Toggle webcam overlay during recording from floating bar."""
+        if self.webcam_overlay and self.webcam_overlay.isVisible():
+            self.webcam_overlay.stop()
+            self.webcam_overlay = None
+        else:
+            dev_id = settings.get("webcam_device_id", 0)
+            shape = settings.get("webcam_shape", "circle")
+            size = settings.get("webcam_size", 220)
+            mirrored = settings.get("webcam_mirrored", True)
+
+            self.webcam_overlay = WebcamPiPOverlay(
+                device_id=dev_id,
+                shape=shape,
+                size=size,
+                mirrored=mirrored
+            )
+            self.webcam_overlay.start_webcam()
+
     def _connect_signals(self):
         # Controller Signals
         controller.state_changed.connect(self._on_state_changed)
@@ -230,6 +342,7 @@ class MainWindow(QMainWindow):
         self.floating_bar.resume_clicked.connect(controller.resume_recording)
         self.floating_bar.stop_clicked.connect(controller.stop_recording)
         self.floating_bar.annotate_clicked.connect(self._toggle_annotations)
+        self.floating_bar.toggle_webcam_clicked.connect(self._toggle_webcam_pip)
         self.floating_bar.screenshot_clicked.connect(self._take_screenshot)
         self.floating_bar.restore_main_clicked.connect(self._restore_main_window)
 
@@ -283,13 +396,19 @@ class MainWindow(QMainWindow):
             self.keystroke_hud.start()
 
         if self.chk_cam.isChecked():
-            shape_idx = self.combo_cam_shape.currentIndex()
-            shapes = ["circle", "rounded", "rect"]
-            self.webcam_overlay = WebcamPiPOverlay(
-                device_id=settings.get("webcam_device_id", 0),
-                shape=shapes[shape_idx],
-            )
-            self.webcam_overlay.start_webcam()
+            if not self.webcam_overlay or not self.webcam_overlay.isVisible():
+                dev_id = self.combo_cam_dev.currentData() if self.combo_cam_dev.count() > 0 else 0
+                shape = self.combo_cam_shape.currentData() or "circle"
+                size = settings.get("webcam_size", 220)
+                mirrored = settings.get("webcam_mirrored", True)
+
+                self.webcam_overlay = WebcamPiPOverlay(
+                    device_id=dev_id,
+                    shape=shape,
+                    size=size,
+                    mirrored=mirrored
+                )
+                self.webcam_overlay.start_webcam()
 
         # Start controller
         if controller.start_recording(region=self.selected_region):
@@ -322,7 +441,7 @@ class MainWindow(QMainWindow):
             self.annotation_canvas.hide()
             self.cursor_effects.stop()
             self.keystroke_hud.stop()
-            if self.webcam_overlay:
+            if self.webcam_overlay and not self._previewing_cam:
                 self.webcam_overlay.stop()
                 self.webcam_overlay = None
             self.tray_service.set_recording_state(False)
@@ -376,6 +495,7 @@ class MainWindow(QMainWindow):
         dlg = SettingsDialog(self)
         if dlg.exec():
             hotkey_service.start(settings.get("hotkeys"))
+            self._refresh_camera_list()
 
     def _refresh_recent_recordings(self):
         self.list_recent.clear()
@@ -414,5 +534,8 @@ class MainWindow(QMainWindow):
             )
             if ret == QMessageBox.StandardButton.Yes:
                 controller.stop_recording()
+        if self.webcam_overlay:
+            self.webcam_overlay.stop()
+            self.webcam_overlay = None
         hotkey_service.stop()
         super().closeEvent(event)

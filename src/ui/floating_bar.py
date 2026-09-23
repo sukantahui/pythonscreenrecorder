@@ -22,6 +22,7 @@ class FloatingBar(QWidget):
     stop_clicked = pyqtSignal()
     annotate_clicked = pyqtSignal()
     screenshot_clicked = pyqtSignal()
+    toggle_webcam_clicked = pyqtSignal()
     restore_main_clicked = pyqtSignal()
 
     def __init__(self):
@@ -124,6 +125,11 @@ class FloatingBar(QWidget):
         self.btn_draw = QPushButton("✏️ Draw", self.frame)
         self.btn_draw.clicked.connect(self.annotate_clicked.emit)
         layout.addWidget(self.btn_draw)
+
+        self.btn_cam = QPushButton("📷", self.frame)
+        self.btn_cam.setToolTip("Toggle Webcam PiP")
+        self.btn_cam.clicked.connect(self.toggle_webcam_clicked.emit)
+        layout.addWidget(self.btn_cam)
 
         self.btn_screenshot = QPushButton("📸", self.frame)
         self.btn_screenshot.setToolTip("Take Screenshot (F11)")

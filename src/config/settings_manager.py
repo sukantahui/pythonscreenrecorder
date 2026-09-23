@@ -33,7 +33,10 @@ class SettingsManager:
         "mic_volume": 100,
         "webcam_enabled": False,
         "webcam_device_id": 0,
+        "webcam_device_name": "",
         "webcam_shape": "circle",  # circle, rounded, rect
+        "webcam_size": 220,
+        "webcam_mirrored": True,
         "show_cursor": True,
         "highlight_clicks": True,
         "show_keystrokes": False,
