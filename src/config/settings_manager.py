@@ -52,6 +52,8 @@ class SettingsManager:
         "show_keystrokes": False,
         "countdown_seconds": 3,
         "minimize_to_tray_on_record": True,
+        "main_window_width": 860,
+        "main_window_height": 840,
         "hotkeys": {
             "record_stop": HOTKEY_RECORD,
             "pause_resume": HOTKEY_PAUSE,

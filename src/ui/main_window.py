@@ -75,8 +75,10 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION} - {COMPANY_NAME} ({COMPANY_SHORT})")
-        self.resize(780, 740)
-        self.setMinimumSize(640, 520)
+        saved_w = int(settings.get("main_window_width", 860))
+        saved_h = int(settings.get("main_window_height", 840))
+        self.resize(saved_w, saved_h)
+        self.setMinimumSize(720, 600)
 
         self.controller = controller
         self.selected_mode = MODE_FULLSCREEN
@@ -111,19 +113,22 @@ class MainWindow(QMainWindow):
 
         # 1. Header Bar
         header_layout = QHBoxLayout()
+        header_layout.setSpacing(12)
 
         title_box = QVBoxLayout()
-        title_box.setSpacing(1)
+        title_box.setSpacing(2)
         lbl_logo = QLabel(f"🔴 {APP_NAME.upper()}")
-        lbl_logo.setStyleSheet("font-size: 16px; font-weight: bold; color: #F9FAFB; letter-spacing: 1px;")
+        lbl_logo.setStyleSheet("font-size: 15px; font-weight: bold; color: #F9FAFB; letter-spacing: 0.5px;")
+        lbl_logo.setMinimumWidth(230)
         lbl_subtitle = QLabel(f"by {COMPANY_NAME} ({COMPANY_SHORT}) • {DEVELOPER_NAME}")
         lbl_subtitle.setStyleSheet("font-size: 11px; color: #818CF8; font-weight: 500;")
+        lbl_subtitle.setMinimumWidth(230)
         title_box.addWidget(lbl_logo)
         title_box.addWidget(lbl_subtitle)
         header_layout.addLayout(title_box)
 
         self.lbl_status = QLabel("● Ready")
-        self.lbl_status.setStyleSheet("color: #10B981; font-weight: 600; font-size: 12px; margin-left: 8px;")
+        self._set_status("● Ready", "ready")
         header_layout.addWidget(self.lbl_status)
         header_layout.addStretch()
 
@@ -773,7 +778,7 @@ class MainWindow(QMainWindow):
                 btn.blockSignals(True)
                 btn.setChecked(False)
                 btn.blockSignals(False)
-            self.lbl_status.setText("● Full Screen")
+            self._set_status("● Full Screen", "ready")
 
     def _on_preset_chip_clicked(self, ratio_key: str):
         """User clicked a preset aspect ratio chip."""
@@ -801,7 +806,7 @@ class MainWindow(QMainWindow):
             btn.blockSignals(False)
 
         suffix = f" ({ratio_label})" if ratio_label and ratio_label != "Custom" else ""
-        self.lbl_status.setText(f"● Region: {region['width']}x{region['height']}{suffix}")
+        self._set_status(f"● Region: {region['width']}x{region['height']}{suffix}", "region")
 
     def _on_region_cancelled(self):
         if not self.selected_region:
@@ -827,7 +832,7 @@ class MainWindow(QMainWindow):
 
         cd_secs = int(settings.get("countdown_seconds", 3))
         if cd_secs > 0:
-            self.lbl_status.setText(f"● Starting in {cd_secs}s... (Press ESC to cancel)")
+            self._set_status(f"● Starting in {cd_secs}s... (Press ESC to cancel)", "paused")
             self.btn_record.setEnabled(False)
             self.countdown_overlay.start_countdown(seconds=cd_secs, region=self.selected_region)
         else:
@@ -835,7 +840,7 @@ class MainWindow(QMainWindow):
 
     def _on_countdown_cancelled(self):
         self.btn_record.setEnabled(True)
-        self.lbl_status.setText("● Ready")
+        self._set_status("● Ready", "ready")
 
     def _execute_start_recording(self):
         self.btn_record.setEnabled(True)
@@ -862,23 +867,72 @@ class MainWindow(QMainWindow):
             self.tray_service.set_recording_state(True)
             self.tray_service.show_notification(APP_NAME, "Recording started!")
 
+    def _set_status(self, text: str, status_type: str = "ready"):
+        """Update top status pill with dynamic styling."""
+        self.lbl_status.setText(text)
+        if status_type == "recording":
+            self.lbl_status.setStyleSheet("""
+                QLabel {
+                    color: #EF4444;
+                    font-weight: bold;
+                    font-size: 11px;
+                    background-color: rgba(239, 68, 68, 0.15);
+                    border: 1px solid rgba(239, 68, 68, 0.4);
+                    border-radius: 12px;
+                    padding: 3px 10px;
+                }
+            """)
+        elif status_type == "paused":
+            self.lbl_status.setStyleSheet("""
+                QLabel {
+                    color: #F59E0B;
+                    font-weight: bold;
+                    font-size: 11px;
+                    background-color: rgba(245, 158, 11, 0.15);
+                    border: 1px solid rgba(245, 158, 11, 0.4);
+                    border-radius: 12px;
+                    padding: 3px 10px;
+                }
+            """)
+        elif status_type == "region":
+            self.lbl_status.setStyleSheet("""
+                QLabel {
+                    color: #818CF8;
+                    font-weight: bold;
+                    font-size: 11px;
+                    background-color: rgba(99, 102, 241, 0.15);
+                    border: 1px solid rgba(99, 102, 241, 0.4);
+                    border-radius: 12px;
+                    padding: 3px 10px;
+                }
+            """)
+        else:
+            self.lbl_status.setStyleSheet("""
+                QLabel {
+                    color: #10B981;
+                    font-weight: 600;
+                    font-size: 11px;
+                    background-color: rgba(16, 185, 129, 0.12);
+                    border: 1px solid rgba(16, 185, 129, 0.25);
+                    border-radius: 12px;
+                    padding: 3px 10px;
+                }
+            """)
+
     def _on_state_changed(self, state: str):
         if state == "recording":
-            self.lbl_status.setText("● Recording")
-            self.lbl_status.setStyleSheet("color: #EF4444; font-weight: bold;")
+            self._set_status("● Recording", "recording")
             self.btn_record.setText("⏹ STOP RECORDING (F9)")
             self.btn_record.setStyleSheet("background-color: #EF4444; border-radius: 24px;")
             self.floating_bar.set_paused_state(False)
             self.tray_service.set_recording_state(True, is_paused=False)
         elif state == "paused":
-            self.lbl_status.setText("⏸ Paused")
-            self.lbl_status.setStyleSheet("color: #F59E0B; font-weight: bold;")
+            self._set_status("⏸ Paused", "paused")
             self.btn_record.setText("▶ RESUME RECORDING (F10)")
             self.floating_bar.set_paused_state(True)
             self.tray_service.set_recording_state(True, is_paused=True)
         elif state in ["idle", "finalizing"]:
-            self.lbl_status.setText("● Ready")
-            self.lbl_status.setStyleSheet("color: #10B981; font-weight: bold;")
+            self._set_status("● Ready", "ready")
             self.btn_record.setText("● START RECORDING (F9)")
             self.btn_record.setStyleSheet("")
             self.floating_bar.hide()
@@ -1072,7 +1126,16 @@ class MainWindow(QMainWindow):
                     QMessageBox.warning(self, "Delete Failed", f"Could not delete file: {e}")
 
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not self.isMaximized() and not self.isMinimized():
+            settings.set("main_window_width", self.width())
+            settings.set("main_window_height", self.height())
+
     def closeEvent(self, event):
+        if not self.isMaximized() and not self.isMinimized():
+            settings.set("main_window_width", self.width())
+            settings.set("main_window_height", self.height())
         if controller.state in ["recording", "paused"]:
             ret = QMessageBox.question(
                 self,
