@@ -127,13 +127,18 @@ class WebcamPiPOverlay(QWidget):
                 start_y = (h - min_dim) // 2
                 cropped = frame[start_y : start_y + min_dim, start_x : start_x + min_dim]
 
+                # Pre-scale to PiP size on worker thread with fast OpenCV SIMD resize
+                target_size = self.pip_size
+                if min_dim != target_size:
+                    cropped = cv2.resize(cropped, (target_size, target_size), interpolation=cv2.INTER_LINEAR)
+
                 # Convert BGR to RGB
                 rgb_frame = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
-                bytes_per_line = 3 * min_dim
+                bytes_per_line = 3 * target_size
                 qimg = QImage(
                     rgb_frame.data,
-                    min_dim,
-                    min_dim,
+                    target_size,
+                    target_size,
                     bytes_per_line,
                     QImage.Format.Format_RGB888,
                 ).copy()
@@ -201,6 +206,10 @@ class WebcamPiPOverlay(QWidget):
         self.timer.stop()
         self.hide()
         self.closed.emit()
+
+    def closeEvent(self, event):
+        self.stop()
+        super().closeEvent(event)
 
     def _is_in_resize_zone(self, pos: QPoint) -> bool:
         """Check if mouse position is in bottom-right resize zone or edge perimeter."""
@@ -358,13 +367,7 @@ class WebcamPiPOverlay(QWidget):
         painter.setClipPath(path)
 
         if self.current_qimage and not self._is_connecting:
-            scaled_img = self.current_qimage.scaled(
-                self.pip_size,
-                self.pip_size,
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            painter.drawImage(0, 0, scaled_img)
+            painter.drawImage(rect, self.current_qimage)
         else:
             # Placeholder / connecting card
             painter.fillRect(rect, QColor("#161820"))

@@ -24,9 +24,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # Windows High-DPI handling is managed natively by Qt6 (Per-Monitor Aware V2)
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication
+import signal
 from src.config.constants import APP_NAME, APP_VERSION
 from src.ui.main_window import MainWindow
 
@@ -54,6 +55,12 @@ def main():
     app.setApplicationVersion(APP_VERSION)
     app.setOrganizationName("Coder & AccoTax")
     app.setOrganizationDomain("codernaccotax.co.in")
+
+    # Graceful terminal Ctrl+C exit handler
+    signal.signal(signal.SIGINT, lambda *args: app.quit())
+    sig_timer = QTimer()
+    sig_timer.start(500)
+    sig_timer.timeout.connect(lambda: None)
 
     # Load styling & icon
     load_stylesheet(app)
