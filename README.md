@@ -217,7 +217,30 @@ python scripts/diagnose_audio.py
 
 ---
 
+## 📦 Building Standalone Single-File Executable (.exe)
+
+You can package **CNAT Screen Recorder** into a portable, standalone single-file Windows executable (`CNAT_Screen_Recorder.exe`) that runs on any modern Windows 10/11 machine without needing Python installed:
+
+Simply double-click or run from command prompt:
+```cmd
+build_exe.bat
+```
+*(or run `build.bat`)*
+
+### What the build process does automatically:
+1. Detects or configures the virtual environment (`.venv`) and installs any missing packaging dependencies.
+2. Generates the high-resolution multi-size application icons (`assets/app_icon.ico`).
+3. Uses [PyInstaller](https://pyinstaller.org/) with [CNAT_Screen_Recorder.spec](file:///e:/pythonscreenrecorder/CNAT_Screen_Recorder.spec) to package:
+   - All Python modules and background threads.
+   - Dark glassmorphic QSS stylesheets (`src/ui/styles.qss`).
+   - QtAwesome vector icon font bundles.
+   - Bundled high-performance FFmpeg video/audio encoding binaries.
+4. Generates a single `.exe` located at `dist\CNAT_Screen_Recorder.exe` and offers to open the folder or launch the app immediately.
+
+---
+
 ## 🔧 Troubleshooting & FAQs
+
 
 <details>
 <summary><b>1. PowerShell script execution error when activating .venv</b></summary>

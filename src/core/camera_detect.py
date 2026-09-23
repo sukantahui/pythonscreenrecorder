@@ -92,4 +92,23 @@ class CameraDetector:
             return False
 
 
+    @classmethod
+    def get_preferred_camera(cls, prefer_iriun: bool = True) -> Dict[str, Any]:
+        """Get the preferred camera, prioritizing Iriun Webcam by default."""
+        cameras = cls.get_available_cameras()
+        if not cameras:
+            return {"id": 0, "name": "Default Camera (Device 0)", "is_default": True}
+
+        if prefer_iriun:
+            for cam in cameras:
+                if any(k in cam["name"].lower() for k in ("iriun", "irium")):
+                    return cam
+
+        for cam in cameras:
+            if cam.get("is_default", False):
+                return cam
+
+        return cameras[0]
+
+
 camera_detector = CameraDetector()

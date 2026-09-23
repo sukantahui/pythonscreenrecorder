@@ -25,7 +25,7 @@ pynput>=1.7.6
 keyboard>=0.13.5
 
 # High-Performance Video/Audio Encoding & Muxing
-PyAV>=11.0.0
+av>=11.0.0
 imageio-ffmpeg>=0.4.9
 
 # System Utilities & Packaging

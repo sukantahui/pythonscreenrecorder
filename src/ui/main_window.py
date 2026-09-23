@@ -189,10 +189,16 @@ class MainWindow(QMainWindow):
         self.card_mic.setProperty("class", "Card")
         mic_layout = QVBoxLayout(self.card_mic)
         mic_layout.setContentsMargins(12, 12, 12, 12)
+        mic_layout.setSpacing(6)
         self.chk_mic = QCheckBox("🎙️ Microphone")
         self.chk_mic.setChecked(settings.get("record_microphone", False))
         self.chk_mic.toggled.connect(lambda c: settings.set("record_microphone", c))
         mic_layout.addWidget(self.chk_mic)
+
+        self.combo_mic_source = QComboBox()
+        self.combo_mic_source.setToolTip("Select microphone or webcam audio input")
+        self.combo_mic_source.currentIndexChanged.connect(self._on_mic_source_changed)
+        mic_layout.addWidget(self.combo_mic_source)
 
         self.vu_mic = QProgressBar()
         self.vu_mic.setRange(0, 100)
@@ -235,11 +241,19 @@ class MainWindow(QMainWindow):
         self.combo_cam_shape.currentIndexChanged.connect(self._on_camera_shape_changed)
         cam_layout.addWidget(self.combo_cam_shape)
 
+        # Webcam Audio Checkbox
+        self.chk_cam_audio = QCheckBox("🎙️ Webcam Audio")
+        self.chk_cam_audio.setToolTip("Capture sound directly from webcam's built-in microphone")
+        self.chk_cam_audio.setChecked(settings.get("record_webcam_audio", False))
+        self.chk_cam_audio.toggled.connect(self._on_webcam_audio_toggled)
+        cam_layout.addWidget(self.chk_cam_audio)
+
         devices_row.addWidget(self.card_cam)
         main_layout.addLayout(devices_row)
 
-        # Populate camera list
+        # Populate camera and audio devices
         self._refresh_camera_list()
+        self._refresh_audio_devices()
 
         # 4. Resolution & Quality Quick Bar
         info_card = QFrame(self)
@@ -311,21 +325,27 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(footer_layout)
 
     def _refresh_camera_list(self):
-        """Populate camera devices into dropdown."""
+        """Populate camera devices into dropdown, prioritizing Iriun Webcam by default."""
         self.combo_cam_dev.blockSignals(True)
         self.combo_cam_dev.clear()
 
         cameras = camera_detector.get_available_cameras()
-        saved_id = settings.get("webcam_device_id", 0)
-        selected_idx = 0
+        saved_id = settings.get("webcam_device_id")
+        preferred_cam = camera_detector.get_preferred_camera(prefer_iriun=True)
+        default_id = preferred_cam["id"] if preferred_cam else 0
+        target_id = default_id if (saved_id is None or saved_id == 0) else saved_id
 
+        selected_idx = 0
         for i, cam in enumerate(cameras):
             self.combo_cam_dev.addItem(f"{cam['name']}", cam["id"])
-            if cam["id"] == saved_id:
+            if cam["id"] == target_id:
                 selected_idx = i
 
         if self.combo_cam_dev.count() > 0:
             self.combo_cam_dev.setCurrentIndex(selected_idx)
+            settings.set("webcam_device_id", self.combo_cam_dev.currentData())
+            settings.set("webcam_device_name", self.combo_cam_dev.currentText())
+
         self.combo_cam_dev.blockSignals(False)
 
         # Set saved shape
@@ -334,6 +354,60 @@ class MainWindow(QMainWindow):
         if shape_idx >= 0:
             self.combo_cam_shape.setCurrentIndex(shape_idx)
 
+    def _refresh_audio_devices(self):
+        """Populate available microphone & webcam audio devices into dropdown, prioritizing Iriun Webcam."""
+        self.combo_mic_source.blockSignals(True)
+        self.combo_mic_source.clear()
+
+        self.combo_mic_source.addItem("🎙️ Default System Microphone", None)
+
+        audio_info = AudioCaptureWorker.get_audio_devices()
+        mics = audio_info.get("microphones", [])
+        saved_id = settings.get("mic_device_id")
+
+        preferred_mic_id = AudioCaptureWorker.get_preferred_mic_device(prefer_iriun=True)
+        target_id = saved_id if saved_id is not None else preferred_mic_id
+
+        selected_idx = 0
+        for i, mic in enumerate(mics):
+            is_cam = mic.get("is_webcam", False)
+            is_iriun = any(k in mic["name"].lower() for k in ("iriun", "irium"))
+            icon_tag = "📷 " if is_cam else "🎙️ "
+            suffix = " [Iriun Webcam]" if is_iriun else (" [Webcam]" if is_cam else "")
+            self.combo_mic_source.addItem(f"{icon_tag}{mic['name']}{suffix}", mic["id"])
+            if target_id is not None and mic["id"] == target_id:
+                selected_idx = i + 1
+
+        self.combo_mic_source.setCurrentIndex(selected_idx)
+        chosen_mic_id = self.combo_mic_source.currentData()
+        if chosen_mic_id is not None:
+            settings.set("mic_device_id", chosen_mic_id)
+
+        # Auto-match webcam audio device ID
+        cam_name = self.combo_cam_dev.currentText() if hasattr(self, "combo_cam_dev") else "Iriun Webcam"
+        webcam_mic_id = AudioCaptureWorker.match_webcam_audio(cam_name)
+        if webcam_mic_id is not None:
+            settings.set("webcam_audio_device_id", webcam_mic_id)
+            settings.set("record_webcam_audio", True)
+            if hasattr(self, "chk_cam_audio"):
+                self.chk_cam_audio.blockSignals(True)
+                self.chk_cam_audio.setChecked(True)
+                self.chk_cam_audio.blockSignals(False)
+
+        self.combo_mic_source.blockSignals(False)
+
+    def _on_mic_source_changed(self, index: int):
+        dev_id = self.combo_mic_source.currentData()
+        settings.set("mic_device_id", dev_id)
+
+    def _on_webcam_audio_toggled(self, checked: bool):
+        settings.set("record_webcam_audio", checked)
+        if checked:
+            cam_name = self.combo_cam_dev.currentText()
+            webcam_mic_id = AudioCaptureWorker.match_webcam_audio(cam_name)
+            if webcam_mic_id is not None:
+                settings.set("webcam_audio_device_id", webcam_mic_id)
+
     def _on_camera_device_changed(self, index: int):
         dev_id = self.combo_cam_dev.currentData()
         if dev_id is not None:
@@ -341,6 +415,10 @@ class MainWindow(QMainWindow):
             settings.set("webcam_device_name", self.combo_cam_dev.currentText())
             if self.webcam_overlay:
                 self.webcam_overlay.switch_device(dev_id)
+            if settings.get("record_webcam_audio", False):
+                webcam_mic_id = AudioCaptureWorker.match_webcam_audio(self.combo_cam_dev.currentText())
+                if webcam_mic_id is not None:
+                    settings.set("webcam_audio_device_id", webcam_mic_id)
 
     def _on_camera_shape_changed(self, index: int):
         shape = self.combo_cam_shape.currentData()
@@ -580,6 +658,13 @@ class MainWindow(QMainWindow):
         if dlg.exec():
             hotkey_service.start(settings.get("hotkeys"))
             self._refresh_camera_list()
+            self._refresh_audio_devices()
+            self.chk_mic.blockSignals(True)
+            self.chk_mic.setChecked(settings.get("record_microphone", False))
+            self.chk_mic.blockSignals(False)
+            self.chk_cam_audio.blockSignals(True)
+            self.chk_cam_audio.setChecked(settings.get("record_webcam_audio", False))
+            self.chk_cam_audio.blockSignals(False)
             self.combo_main_res.blockSignals(True)
             self.combo_main_res.setCurrentText(settings.get("resolution", DEFAULT_RESOLUTION))
             self.combo_main_res.blockSignals(False)

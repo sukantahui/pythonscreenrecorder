@@ -190,8 +190,10 @@ class SettingsDialog(QDialog):
         mic_form.addRow(self.chk_mic_audio)
 
         self.combo_mic_dev = QComboBox()
+        self.combo_mic_dev.addItem("Default System Microphone", None)
         for mic in devices.get("microphones", []):
-            self.combo_mic_dev.addItem(mic["name"], mic["id"])
+            tag = " 📷 [Webcam]" if mic.get("is_webcam", False) else ""
+            self.combo_mic_dev.addItem(f"{mic['name']}{tag}", mic["id"])
         mic_form.addRow("Microphone Device:", self.combo_mic_dev)
 
         self.slider_mic_vol = QSlider(Qt.Orientation.Horizontal)
@@ -199,6 +201,24 @@ class SettingsDialog(QDialog):
         self.slider_mic_vol.setValue(100)
         mic_form.addRow("Mic Volume:", self.slider_mic_vol)
         layout.addWidget(grp_mic)
+
+        # Webcam Audio
+        grp_cam_audio = QGroupBox("Webcam Audio Input")
+        cam_audio_form = QFormLayout(grp_cam_audio)
+        self.chk_webcam_audio = QCheckBox("Capture Webcam Built-In Microphone")
+        cam_audio_form.addRow(self.chk_webcam_audio)
+
+        self.combo_webcam_audio_dev = QComboBox()
+        self.combo_webcam_audio_dev.addItem("Auto-Detect from Active Webcam", None)
+        for mic in devices.get("webcam_microphones", []):
+            self.combo_webcam_audio_dev.addItem(f"📷 {mic['name']}", mic["id"])
+        cam_audio_form.addRow("Webcam Audio Device:", self.combo_webcam_audio_dev)
+
+        self.slider_webcam_vol = QSlider(Qt.Orientation.Horizontal)
+        self.slider_webcam_vol.setRange(0, 200)
+        self.slider_webcam_vol.setValue(100)
+        cam_audio_form.addRow("Webcam Volume:", self.slider_webcam_vol)
+        layout.addWidget(grp_cam_audio)
 
         layout.addStretch()
 
@@ -243,6 +263,15 @@ class SettingsDialog(QDialog):
         self.chk_cam_mirror = QCheckBox("Flip / Mirror camera feed horizontally")
         cam_form.addRow("", self.chk_cam_mirror)
 
+        self.chk_cam_record_audio = QCheckBox("Capture sound from this webcam during recording")
+        self.chk_cam_record_audio.toggled.connect(
+            lambda checked: self.chk_webcam_audio.setChecked(checked)
+        )
+        self.chk_webcam_audio.toggled.connect(
+            lambda checked: self.chk_cam_record_audio.setChecked(checked)
+        )
+        cam_form.addRow("", self.chk_cam_record_audio)
+
         layout.addWidget(grp_cam)
 
         # Cursor & Overlay Effects Group
@@ -281,15 +310,18 @@ class SettingsDialog(QDialog):
         layout.addStretch()
 
     def _refresh_camera_devices(self):
-        """Populate camera devices dropdown."""
-        curr_id = self.combo_cam_dev.currentData() if self.combo_cam_dev.count() > 0 else settings.get("webcam_device_id", 0)
-        self.combo_cam_dev.clear()
-
+        """Populate camera devices dropdown, prioritizing Iriun Webcam by default."""
         cameras = camera_detector.get_available_cameras()
+        saved_id = settings.get("webcam_device_id")
+        preferred_cam = camera_detector.get_preferred_camera(prefer_iriun=True)
+        default_id = preferred_cam["id"] if preferred_cam else 0
+        target_id = default_id if (saved_id is None or saved_id == 0) else saved_id
+
+        self.combo_cam_dev.clear()
         select_idx = 0
         for i, cam in enumerate(cameras):
             self.combo_cam_dev.addItem(f"{cam['name']} (ID {cam['id']})", cam["id"])
-            if cam["id"] == curr_id:
+            if cam["id"] == target_id:
                 select_idx = i
 
         if self.combo_cam_dev.count() > 0:
@@ -313,6 +345,24 @@ class SettingsDialog(QDialog):
 
         self.chk_mic_audio.setChecked(settings.get("record_microphone", False))
         self.slider_mic_vol.setValue(int(settings.get("mic_volume", 100)))
+        saved_mic_id = settings.get("mic_device_id")
+        preferred_mic_id = AudioCaptureWorker.get_preferred_mic_device(prefer_iriun=True)
+        target_mic_id = saved_mic_id if saved_mic_id is not None else preferred_mic_id
+        if target_mic_id is not None:
+            idx = self.combo_mic_dev.findData(target_mic_id)
+            if idx >= 0:
+                self.combo_mic_dev.setCurrentIndex(idx)
+
+        # Load webcam audio
+        rec_cam_audio = settings.get("record_webcam_audio", False)
+        self.chk_webcam_audio.setChecked(rec_cam_audio)
+        self.chk_cam_record_audio.setChecked(rec_cam_audio)
+        self.slider_webcam_vol.setValue(int(settings.get("webcam_audio_volume", 100)))
+        saved_cam_audio_id = settings.get("webcam_audio_device_id")
+        if saved_cam_audio_id is not None:
+            idx = self.combo_webcam_audio_dev.findData(saved_cam_audio_id)
+            if idx >= 0:
+                self.combo_webcam_audio_dev.setCurrentIndex(idx)
 
         # Load cameras
         self._refresh_camera_devices()
@@ -354,6 +404,10 @@ class SettingsDialog(QDialog):
         settings.set("record_microphone", self.chk_mic_audio.isChecked())
         settings.set("mic_device_id", self.combo_mic_dev.currentData())
         settings.set("mic_volume", self.slider_mic_vol.value())
+
+        settings.set("record_webcam_audio", self.chk_webcam_audio.isChecked())
+        settings.set("webcam_audio_device_id", self.combo_webcam_audio_dev.currentData())
+        settings.set("webcam_audio_volume", self.slider_webcam_vol.value())
 
         # Save Webcam Settings
         if self.combo_cam_dev.currentData() is not None:

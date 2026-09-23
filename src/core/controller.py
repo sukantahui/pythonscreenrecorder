@@ -108,7 +108,14 @@ class RecordingController(QObject):
         # Initialize Audio Capture Worker
         rec_sys = settings.get("record_system_audio", True)
         rec_mic = settings.get("record_microphone", False)
-        has_audio = rec_sys or rec_mic
+        rec_webcam_audio = settings.get("record_webcam_audio", False)
+
+        webcam_audio_id = settings.get("webcam_audio_device_id")
+        if rec_webcam_audio and webcam_audio_id is None:
+            active_cam_name = settings.get("webcam_device_name", "")
+            webcam_audio_id = AudioCaptureWorker.match_webcam_audio(active_cam_name)
+
+        has_audio = rec_sys or rec_mic or (rec_webcam_audio and webcam_audio_id is not None)
 
         if has_audio:
             self.audio_queue = queue.Queue(maxsize=200)
@@ -117,8 +124,11 @@ class RecordingController(QObject):
                 record_system_audio=rec_sys,
                 record_mic=rec_mic,
                 mic_device_id=settings.get("mic_device_id"),
+                record_webcam_audio=rec_webcam_audio and (webcam_audio_id is not None),
+                webcam_audio_device_id=webcam_audio_id,
                 system_volume=settings.get("system_audio_volume", 100) / 100.0,
                 mic_volume=settings.get("mic_volume", 100) / 100.0,
+                webcam_volume=settings.get("webcam_audio_volume", 100) / 100.0,
                 level_callback=lambda sys_lvl, mic_lvl: self.audio_levels_updated.emit(sys_lvl, mic_lvl),
             )
             # Start background audio writer to write WAV temp file
