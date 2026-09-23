@@ -260,7 +260,8 @@ class MainWindow(QMainWindow):
         mic_layout.setContentsMargins(12, 12, 12, 12)
         mic_layout.setSpacing(6)
         self.chk_mic = QCheckBox("🎙️ Microphone")
-        self.chk_mic.setChecked(settings.get("record_microphone", True))
+        self.chk_mic.setChecked(True)
+        settings.set("record_microphone", True)
         self.chk_mic.toggled.connect(lambda c: settings.set("record_microphone", c))
         mic_layout.addWidget(self.chk_mic)
 
@@ -534,7 +535,8 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, "chk_mic"):
             self.chk_mic.blockSignals(True)
-            self.chk_mic.setChecked(settings.get("record_microphone", True))
+            self.chk_mic.setChecked(True)
+            settings.set("record_microphone", True)
             self.chk_mic.blockSignals(False)
 
         # Auto-match webcam audio device ID for when user decides to enable it
