@@ -110,9 +110,11 @@ for /f "tokens=*" %%H in ('git rev-parse --short HEAD 2^>nul') do (
 echo =====================================================================
 echo.
 
-REM Pause if launched via double-click in Explorer
-echo %CMDCMDLINE% | find /i "%~0" >nul
-if not errorlevel 1 (
-    pause
+REM Pause only if launched without arguments and via double-click in Explorer
+if "%~1"=="" (
+    echo %CMDCMDLINE% | find /i "%~0" >nul
+    if not errorlevel 1 (
+        pause
+    )
 )
 exit /b 0
