@@ -56,6 +56,7 @@ from src.overlays.cursor_effects import CursorEffectsOverlay
 from src.overlays.keystroke_hud import KeystrokeHUDOverlay
 from src.ui.floating_bar import FloatingBar
 from src.ui.settings_dialog import SettingsDialog
+from src.ui.shortcuts_dialog import ShortcutsDialog
 from src.ui.about_dialog import AboutDialog
 from src.ui.preview_dialog import PreviewDialog
 from src.services.hotkey_service import hotkey_service
@@ -120,6 +121,11 @@ class MainWindow(QMainWindow):
         btn_folder = QPushButton("📁 Recordings")
         btn_folder.clicked.connect(lambda: post_processor.open_folder(settings.get("output_dir", DEFAULT_OUTPUT_DIR)))
         header_layout.addWidget(btn_folder)
+
+        btn_shortcuts = QPushButton("⌨️ Shortcuts")
+        btn_shortcuts.setToolTip("View keyboard shortcuts reference")
+        btn_shortcuts.clicked.connect(self._open_shortcuts)
+        header_layout.addWidget(btn_shortcuts)
 
         btn_settings = QPushButton("⚙️ Settings")
         btn_settings.clicked.connect(self._open_settings)
@@ -417,6 +423,8 @@ class MainWindow(QMainWindow):
         hotkey_service.record_stop_triggered.connect(self._toggle_recording)
         hotkey_service.pause_resume_triggered.connect(self._toggle_pause)
         hotkey_service.annotate_triggered.connect(self._toggle_annotations)
+        hotkey_service.toggle_webcam_triggered.connect(self._toggle_webcam_pip)
+        hotkey_service.mute_mic_triggered.connect(self._toggle_mute_mic)
         hotkey_service.screenshot_triggered.connect(self._take_screenshot)
 
         # Tray
@@ -579,6 +587,20 @@ class MainWindow(QMainWindow):
             self.combo_main_quality.setCurrentText(settings.get("quality_profile", DEFAULT_QUALITY))
             self.combo_main_quality.blockSignals(False)
             self.lbl_fps_info.setText(f"⚡ {settings.get('fps', 60)} FPS")
+
+    def _open_shortcuts(self):
+        """Open the Keyboard Shortcuts Reference Dialog."""
+        dlg = ShortcutsDialog(self)
+        dlg.exec()
+
+    def _toggle_mute_mic(self):
+        """Hotkey handler to toggle microphone mute status live."""
+        current = self.chk_mic.isChecked()
+        new_state = not current
+        self.chk_mic.setChecked(new_state)
+        settings.set("record_microphone", new_state)
+        status_text = "Microphone Enabled" if new_state else "Microphone Muted"
+        self.tray_service.show_notification(APP_NAME, f"🎙️ {status_text} (F6)")
 
     def _open_about(self):
         """Open the CNAT Credits & About Dialog."""

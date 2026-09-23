@@ -1,5 +1,7 @@
 """
 Global hotkey listener service using pynput.
+Supports customizable shortcuts for record/stop, pause, annotate,
+webcam toggle, microphone mute toggle, and screenshots.
 """
 
 from typing import Callable, Dict
@@ -13,6 +15,8 @@ class HotkeyService(QObject):
     record_stop_triggered = pyqtSignal()
     pause_resume_triggered = pyqtSignal()
     annotate_triggered = pyqtSignal()
+    toggle_webcam_triggered = pyqtSignal()
+    mute_mic_triggered = pyqtSignal()
     screenshot_triggered = pyqtSignal()
 
     def __init__(self):
@@ -28,6 +32,8 @@ class HotkeyService(QObject):
                 "record_stop": "F9",
                 "pause_resume": "F10",
                 "annotate": "F8",
+                "toggle_webcam": "F7",
+                "mute_mic": "F6",
                 "screenshot": "F11",
             }
 
@@ -41,13 +47,17 @@ class HotkeyService(QObject):
             return f"<{k}>" if len(k) > 1 else k
 
         bindings = {}
-        if "record_stop" in hotkeys_map:
+        if "record_stop" in hotkeys_map and hotkeys_map["record_stop"]:
             bindings[to_pynput_str(hotkeys_map["record_stop"])] = self.record_stop_triggered.emit
-        if "pause_resume" in hotkeys_map:
+        if "pause_resume" in hotkeys_map and hotkeys_map["pause_resume"]:
             bindings[to_pynput_str(hotkeys_map["pause_resume"])] = self.pause_resume_triggered.emit
-        if "annotate" in hotkeys_map:
+        if "annotate" in hotkeys_map and hotkeys_map["annotate"]:
             bindings[to_pynput_str(hotkeys_map["annotate"])] = self.annotate_triggered.emit
-        if "screenshot" in hotkeys_map:
+        if "toggle_webcam" in hotkeys_map and hotkeys_map["toggle_webcam"]:
+            bindings[to_pynput_str(hotkeys_map["toggle_webcam"])] = self.toggle_webcam_triggered.emit
+        if "mute_mic" in hotkeys_map and hotkeys_map["mute_mic"]:
+            bindings[to_pynput_str(hotkeys_map["mute_mic"])] = self.mute_mic_triggered.emit
+        if "screenshot" in hotkeys_map and hotkeys_map["screenshot"]:
             bindings[to_pynput_str(hotkeys_map["screenshot"])] = self.screenshot_triggered.emit
 
         try:

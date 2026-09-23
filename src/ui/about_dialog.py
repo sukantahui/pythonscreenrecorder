@@ -111,9 +111,13 @@ class AboutDialog(QDialog):
 
         # Action Buttons
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(12)
+        btn_layout.setSpacing(10)
 
-        btn_web = QPushButton("🌐 Visit CNAT Website")
+        btn_shortcuts = QPushButton("⌨️ Shortcuts")
+        btn_shortcuts.clicked.connect(self._open_shortcuts)
+        btn_layout.addWidget(btn_shortcuts)
+
+        btn_web = QPushButton("🌐 Visit CNAT")
         btn_web.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(COMPANY_WEBSITE)))
         btn_layout.addWidget(btn_web)
 
@@ -122,3 +126,8 @@ class AboutDialog(QDialog):
         btn_layout.addWidget(btn_close)
 
         layout.addLayout(btn_layout)
+
+    def _open_shortcuts(self):
+        from src.ui.shortcuts_dialog import ShortcutsDialog
+        dlg = ShortcutsDialog(self)
+        dlg.exec()

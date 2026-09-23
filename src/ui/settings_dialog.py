@@ -270,6 +270,10 @@ class SettingsDialog(QDialog):
         hk_form.addRow("Pause / Resume:", self.txt_hk_pause)
         self.txt_hk_draw = QLineEdit("F8")
         hk_form.addRow("Toggle Annotations:", self.txt_hk_draw)
+        self.txt_hk_cam = QLineEdit("F7")
+        hk_form.addRow("Toggle Webcam PiP:", self.txt_hk_cam)
+        self.txt_hk_mic = QLineEdit("F6")
+        hk_form.addRow("Mute / Unmute Mic:", self.txt_hk_mic)
         self.txt_hk_snap = QLineEdit("F11")
         hk_form.addRow("Take Screenshot:", self.txt_hk_snap)
         layout.addWidget(grp_hk)
@@ -331,6 +335,8 @@ class SettingsDialog(QDialog):
         self.txt_hk_rec.setText(hk.get("record_stop", "F9"))
         self.txt_hk_pause.setText(hk.get("pause_resume", "F10"))
         self.txt_hk_draw.setText(hk.get("annotate", "F8"))
+        self.txt_hk_cam.setText(hk.get("toggle_webcam", "F7"))
+        self.txt_hk_mic.setText(hk.get("mute_mic", "F6"))
         self.txt_hk_snap.setText(hk.get("screenshot", "F11"))
 
     def _save_and_close(self):
@@ -365,6 +371,8 @@ class SettingsDialog(QDialog):
             "record_stop": self.txt_hk_rec.text().strip(),
             "pause_resume": self.txt_hk_pause.text().strip(),
             "annotate": self.txt_hk_draw.text().strip(),
+            "toggle_webcam": self.txt_hk_cam.text().strip(),
+            "mute_mic": self.txt_hk_mic.text().strip(),
             "screenshot": self.txt_hk_snap.text().strip(),
         })
 

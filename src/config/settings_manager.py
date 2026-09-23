@@ -9,10 +9,14 @@ from typing import Any, Dict
 from src.config.constants import (
     DEFAULT_OUTPUT_DIR,
     DEFAULT_FPS,
+    DEFAULT_RESOLUTION,
+    DEFAULT_QUALITY,
     FORMAT_MP4,
     HOTKEY_RECORD,
     HOTKEY_PAUSE,
     HOTKEY_ANNOTATE,
+    HOTKEY_WEBCAM,
+    HOTKEY_MIC_MUTE,
     HOTKEY_SCREENSHOT,
 )
 
@@ -24,8 +28,8 @@ class SettingsManager:
         "output_dir": DEFAULT_OUTPUT_DIR,
         "fps": DEFAULT_FPS,
         "format": FORMAT_MP4,
-        "resolution": "4K Ultra HD (3840x2160)",
-        "quality_profile": "4K Ultra Master (60 Mbps)",
+        "resolution": DEFAULT_RESOLUTION,
+        "quality_profile": DEFAULT_QUALITY,
         "encoder": "auto",
         "record_system_audio": True,
         "system_audio_volume": 100,
@@ -47,13 +51,15 @@ class SettingsManager:
             "record_stop": HOTKEY_RECORD,
             "pause_resume": HOTKEY_PAUSE,
             "annotate": HOTKEY_ANNOTATE,
+            "toggle_webcam": HOTKEY_WEBCAM,
+            "mute_mic": HOTKEY_MIC_MUTE,
             "screenshot": HOTKEY_SCREENSHOT,
         },
     }
 
     def __init__(self, config_path: str = None):
         if config_path is None:
-            config_dir = Path.home() / ".apex_screen_recorder"
+            config_dir = Path.home() / ".cnat_screen_recorder"
             config_dir.mkdir(parents=True, exist_ok=True)
             self.config_file = config_dir / "settings.json"
         else:

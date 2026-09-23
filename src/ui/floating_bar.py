@@ -114,25 +114,28 @@ class FloatingBar(QWidget):
 
         # Control Buttons
         self.btn_pause = QPushButton("⏸ Pause", self.frame)
+        self.btn_pause.setToolTip("Pause / Resume Recording (F10)")
         self.btn_pause.clicked.connect(self._toggle_pause)
         layout.addWidget(self.btn_pause)
 
         self.btn_stop = QPushButton("⏹ Stop", self.frame)
         self.btn_stop.setObjectName("BtnStop")
+        self.btn_stop.setToolTip("Stop & Save Recording (F9)")
         self.btn_stop.clicked.connect(self.stop_clicked.emit)
         layout.addWidget(self.btn_stop)
 
         self.btn_draw = QPushButton("✏️ Draw", self.frame)
+        self.btn_draw.setToolTip("Toggle Annotations Canvas (F8)")
         self.btn_draw.clicked.connect(self.annotate_clicked.emit)
         layout.addWidget(self.btn_draw)
 
         self.btn_cam = QPushButton("📷", self.frame)
-        self.btn_cam.setToolTip("Toggle Webcam PiP")
+        self.btn_cam.setToolTip("Toggle Webcam PiP (F7)")
         self.btn_cam.clicked.connect(self.toggle_webcam_clicked.emit)
         layout.addWidget(self.btn_cam)
 
         self.btn_screenshot = QPushButton("📸", self.frame)
-        self.btn_screenshot.setToolTip("Take Screenshot (F11)")
+        self.btn_screenshot.setToolTip("Take HD Screenshot (F11)")
         self.btn_screenshot.clicked.connect(self.screenshot_clicked.emit)
         layout.addWidget(self.btn_screenshot)
 

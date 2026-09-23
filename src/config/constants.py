@@ -6,7 +6,7 @@ from pathlib import Path
 import os
 
 # Application & Organization Metadata
-APP_NAME = "Apex Screen Recorder"
+APP_NAME = "CNAT Screen Recorder"
 APP_VERSION = "1.0.0"
 DEVELOPER_NAME = "Sukanta Hui"
 COMPANY_NAME = "Coder & AccoTax"
@@ -17,7 +17,7 @@ APP_AUTHOR = f"{DEVELOPER_NAME} ({COMPANY_NAME})"
 COPYRIGHT_TEXT = f"© 2026 {COMPANY_NAME} ({COMPANY_SHORT}). All rights reserved."
 
 # Directories
-DEFAULT_OUTPUT_DIR = str(Path.home() / "Videos" / "ApexRecordings")
+DEFAULT_OUTPUT_DIR = str(Path.home() / "Videos" / "CNATRecordings")
 os.makedirs(DEFAULT_OUTPUT_DIR, exist_ok=True)
 
 # Capture Modes
@@ -75,6 +75,8 @@ AUDIO_BITRATE = "192k"
 HOTKEY_RECORD = "F9"
 HOTKEY_PAUSE = "F10"
 HOTKEY_ANNOTATE = "F8"
+HOTKEY_WEBCAM = "F7"
+HOTKEY_MIC_MUTE = "F6"
 HOTKEY_SCREENSHOT = "F11"
 
 # UI Color Tokens
