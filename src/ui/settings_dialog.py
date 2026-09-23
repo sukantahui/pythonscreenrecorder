@@ -31,6 +31,7 @@ from src.core.audio_capture import AudioCaptureWorker
 from src.core.camera_detect import camera_detector
 from src.core.hardware_detect import hardware_detector
 from src.services.post_processor import PostProcessor
+from src.ui.about_dialog import AboutDialog
 
 
 class SettingsDialog(QDialog):
@@ -75,6 +76,10 @@ class SettingsDialog(QDialog):
         # Bottom Action Buttons
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
+
+        btn_about = QPushButton("ℹ️ About CNAT")
+        btn_about.clicked.connect(lambda: AboutDialog(self).exec())
+        btn_layout.addWidget(btn_about)
 
         btn_open_folder = QPushButton("📂 Open Videos Folder")
         btn_open_folder.clicked.connect(lambda: PostProcessor.open_folder(self.txt_output_dir.text()))

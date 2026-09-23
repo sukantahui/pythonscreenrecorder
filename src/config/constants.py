@@ -5,10 +5,16 @@ Application-wide constants, default configurations, and theme tokens.
 from pathlib import Path
 import os
 
-# Application Metadata
+# Application & Organization Metadata
 APP_NAME = "Apex Screen Recorder"
 APP_VERSION = "1.0.0"
-APP_AUTHOR = "Antigravity"
+DEVELOPER_NAME = "Sukanta Hui"
+COMPANY_NAME = "Coder & AccoTax"
+COMPANY_SHORT = "CNAT"
+COMPANY_WEBSITE = "https://www.codernaccotax.co.in"
+COMPANY_PHONE = "7003756860"
+APP_AUTHOR = f"{DEVELOPER_NAME} ({COMPANY_NAME})"
+COPYRIGHT_TEXT = f"© 2026 {COMPANY_NAME} ({COMPANY_SHORT}). All rights reserved."
 
 # Directories
 DEFAULT_OUTPUT_DIR = str(Path.home() / "Videos" / "ApexRecordings")

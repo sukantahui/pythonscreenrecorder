@@ -5,8 +5,8 @@ Primary Dashboard and Main Application Window.
 import os
 import glob
 from typing import Optional, Dict, Any
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot
-from PyQt6.QtGui import QIcon, QFont, QColor
+from PyQt6.QtCore import Qt, QTimer, pyqtSlot, QUrl
+from PyQt6.QtGui import QIcon, QFont, QColor, QDesktopServices
 from PyQt6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -29,6 +29,11 @@ from PyQt6.QtWidgets import (
 from src.config.constants import (
     APP_NAME,
     APP_VERSION,
+    DEVELOPER_NAME,
+    COMPANY_NAME,
+    COMPANY_SHORT,
+    COMPANY_WEBSITE,
+    COMPANY_PHONE,
     MODE_FULLSCREEN,
     MODE_REGION,
     MODE_WINDOW,
@@ -47,6 +52,7 @@ from src.overlays.cursor_effects import CursorEffectsOverlay
 from src.overlays.keystroke_hud import KeystrokeHUDOverlay
 from src.ui.floating_bar import FloatingBar
 from src.ui.settings_dialog import SettingsDialog
+from src.ui.about_dialog import AboutDialog
 from src.ui.preview_dialog import PreviewDialog
 from src.services.hotkey_service import hotkey_service
 from src.services.tray_service import TrayService
@@ -58,8 +64,8 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
-        self.setFixedSize(760, 700)
+        self.setWindowTitle(f"{APP_NAME} v{APP_VERSION} - {COMPANY_NAME} ({COMPANY_SHORT})")
+        self.setFixedSize(760, 720)
 
         self.selected_mode = MODE_FULLSCREEN
         self.selected_region: Optional[Dict[str, int]] = None
@@ -86,14 +92,21 @@ class MainWindow(QMainWindow):
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(16)
+        main_layout.setContentsMargins(20, 18, 20, 14)
+        main_layout.setSpacing(14)
 
         # 1. Header Bar
         header_layout = QHBoxLayout()
+
+        title_box = QVBoxLayout()
+        title_box.setSpacing(1)
         lbl_logo = QLabel(f"🔴 {APP_NAME.upper()}")
         lbl_logo.setStyleSheet("font-size: 16px; font-weight: bold; color: #F9FAFB; letter-spacing: 1px;")
-        header_layout.addWidget(lbl_logo)
+        lbl_subtitle = QLabel(f"by {COMPANY_NAME} ({COMPANY_SHORT}) • {DEVELOPER_NAME}")
+        lbl_subtitle.setStyleSheet("font-size: 11px; color: #818CF8; font-weight: 500;")
+        title_box.addWidget(lbl_logo)
+        title_box.addWidget(lbl_subtitle)
+        header_layout.addLayout(title_box)
 
         self.lbl_status = QLabel("● Ready")
         self.lbl_status.setStyleSheet("color: #10B981; font-weight: 600; font-size: 12px; margin-left: 8px;")
@@ -107,6 +120,10 @@ class MainWindow(QMainWindow):
         btn_settings = QPushButton("⚙️ Settings")
         btn_settings.clicked.connect(self._open_settings)
         header_layout.addWidget(btn_settings)
+
+        btn_about = QPushButton("ℹ️ About")
+        btn_about.clicked.connect(self._open_about)
+        header_layout.addWidget(btn_about)
 
         main_layout.addLayout(header_layout)
 
@@ -230,12 +247,31 @@ class MainWindow(QMainWindow):
 
         # 6. Recent Recordings List
         lbl_recent = QLabel("Recent Recordings")
-        lbl_recent.setStyleSheet("font-size: 14px; font-weight: bold; color: #F9FAFB; margin-top: 6px;")
+        lbl_recent.setStyleSheet("font-size: 14px; font-weight: bold; color: #F9FAFB; margin-top: 4px;")
         main_layout.addWidget(lbl_recent)
 
         self.list_recent = QListWidget(self)
         self.list_recent.itemDoubleClicked.connect(self._on_recent_item_double_clicked)
         main_layout.addWidget(self.list_recent)
+
+        # 7. Footer Branding Bar
+        footer_layout = QHBoxLayout()
+        footer_layout.setContentsMargins(4, 2, 4, 0)
+        lbl_footer = QLabel(
+            f"<span>Developer: <b>{DEVELOPER_NAME}</b> | <b>{COMPANY_NAME} ({COMPANY_SHORT})</b> | 🌐 <a href='{COMPANY_WEBSITE}' style='color: #818CF8; text-decoration: none;'>www.codernaccotax.co.in</a> | 📞 <a href='tel:{COMPANY_PHONE}' style='color: #818CF8; text-decoration: none;'>{COMPANY_PHONE}</a></span>"
+        )
+        lbl_footer.setOpenExternalLinks(True)
+        lbl_footer.setStyleSheet("font-size: 11px; color: #9CA3AF;")
+        footer_layout.addWidget(lbl_footer)
+        footer_layout.addStretch()
+
+        btn_footer_about = QPushButton("ℹ️ About")
+        btn_footer_about.setFixedHeight(24)
+        btn_footer_about.setStyleSheet("font-size: 11px; padding: 2px 10px; background-color: #1A1C24;")
+        btn_footer_about.clicked.connect(self._open_about)
+        footer_layout.addWidget(btn_footer_about)
+
+        main_layout.addLayout(footer_layout)
 
     def _refresh_camera_list(self):
         """Populate camera devices into dropdown."""
@@ -359,6 +395,7 @@ class MainWindow(QMainWindow):
         self.tray_service.stop_requested.connect(controller.stop_recording)
         self.tray_service.open_folder_requested.connect(lambda: post_processor.open_folder(settings.get("output_dir")))
         self.tray_service.settings_requested.connect(self._open_settings)
+        self.tray_service.about_requested.connect(self._open_about)
         self.tray_service.exit_requested.connect(QApplication.instance().quit)
 
     def _set_mode(self, mode: str):
@@ -496,6 +533,11 @@ class MainWindow(QMainWindow):
         if dlg.exec():
             hotkey_service.start(settings.get("hotkeys"))
             self._refresh_camera_list()
+
+    def _open_about(self):
+        """Open the CNAT Credits & About Dialog."""
+        dlg = AboutDialog(self)
+        dlg.exec()
 
     def _refresh_recent_recordings(self):
         self.list_recent.clear()

@@ -33,7 +33,8 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
-    app.setOrganizationName("Antigravity")
+    app.setOrganizationName("Coder & AccoTax")
+    app.setOrganizationDomain("codernaccotax.co.in")
 
     # Load styling
     load_stylesheet(app)
