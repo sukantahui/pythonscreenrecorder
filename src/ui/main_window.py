@@ -72,6 +72,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION} - {COMPANY_NAME} ({COMPANY_SHORT})")
         self.setFixedSize(760, 720)
 
+        self.controller = controller
         self.selected_mode = MODE_FULLSCREEN
         self.selected_region: Optional[Dict[str, int]] = None
         self._previewing_cam = False
@@ -424,7 +425,7 @@ class MainWindow(QMainWindow):
     def _on_noise_reduction_changed(self, value: int):
         self._update_noise_label(value)
         settings.set("noise_reduction", value)
-        self.controller.set_noise_reduction(value)
+        controller.set_noise_reduction(value)
 
     def _update_noise_label(self, value: int):
         if value <= 0:
