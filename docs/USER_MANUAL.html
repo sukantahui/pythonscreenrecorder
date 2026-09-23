@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CNAT Screen Recorder — Official User Manual & Operating Guide</title>
+  <style>
+    :root {
+      --bg-primary: #0F1117;
+      --bg-card: #161822;
+      --bg-card-hover: #1E2130;
+      --accent-purple: #6366F1;
+      --accent-purple-glow: #818CF8;
+      --accent-emerald: #10B981;
+      --accent-rose: #EF4444;
+      --accent-amber: #F59E0B;
+      --text-primary: #F9FAFB;
+      --text-secondary: #9CA3AF;
+      --text-muted: #6B7280;
+      --border-color: #2D3142;
+      --border-highlight: #4F46E5;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      padding: 0;
+      margin: 0;
+    }
+    header {
+      background: linear-gradient(135deg, #1E1B4B 0%, #0F1117 100%);
+      border-bottom: 1px solid var(--border-highlight);
+      padding: 40px 24px;
+      text-align: center;
+    }
+    .header-badge {
+      display: inline-block;
+      background-color: rgba(99, 102, 241, 0.15);
+      color: var(--accent-purple-glow);
+      border: 1px solid var(--accent-purple);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #FFFFFF;
+      margin-bottom: 10px;
+      letter-spacing: -0.5px;
+    }
+    .subtitle {
+      font-size: 1.1rem;
+      color: var(--text-secondary);
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 36px 20px;
+    }
+    .org-banner {
+      background: linear-gradient(135deg, #1A1D2B, #161824);
+      border: 1px solid var(--border-highlight);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 36px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    .org-item {
+      border-left: 3px solid var(--accent-purple);
+      padding-left: 12px;
+    }
+    .org-item .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      font-weight: bold;
+    }
+    .org-item .value {
+      font-size: 14px;
+      color: var(--text-primary);
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    .org-item a {
+      color: var(--accent-purple-glow);
+      text-decoration: none;
+    }
+    .org-item a:hover {
+      text-decoration: underline;
+    }
+    .toc-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 40px;
+    }
+    .toc-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent-purple-glow);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .toc-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 10px;
+    }
+    .toc-link {
+      display: block;
+      color: var(--text-secondary);
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .toc-link:hover {
+      background-color: var(--bg-card-hover);
+      color: #FFFFFF;
+      padding-left: 14px;
+    }
+    section {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 30px;
+      margin-bottom: 30px;
+    }
+    section h2 {
+      font-size: 1.5rem;
+      color: #FFFFFF;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    section h3 {
+      font-size: 1.2rem;
+      color: var(--accent-purple-glow);
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+    p, li {
+      color: #D1D5DB;
+      font-size: 15px;
+      line-height: 1.7;
+      margin-bottom: 12px;
+    }
+    ul, ol {
+      padding-left: 24px;
+      margin-bottom: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+    th {
+      background-color: #12141D;
+      color: var(--accent-purple-glow);
+      font-weight: 700;
+    }
+    tr:hover td {
+      background-color: rgba(99, 102, 241, 0.05);
+    }
+    .hotkey-badge {
+      display: inline-block;
+      background-color: #20232E;
+      color: #FFFFFF;
+      border: 1px solid #3F4458;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+    .feature-box {
+      background-color: #11131B;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .feature-box h4 {
+      font-size: 15px;
+      color: #FFFFFF;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feature-box p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+    }
+    .alert-tip {
+      background-color: rgba(16, 185, 129, 0.1);
+      border-left: 4px solid var(--accent-emerald);
+      padding: 14px 18px;
+      border-radius: 0 8px 8px 0;
+      margin: 20px 0;
+    }
+    .alert-tip b {
+      color: var(--accent-emerald);
+    }
+    footer {
+      background-color: #0B0D13;
+      border-top: 1px solid var(--border-color);
+      padding: 30px 20px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    footer a {
+      color: var(--accent-purple-glow);
+      text-decoration: none;
+    }
+    @media print {
+      body {
+        background-color: #FFFFFF;
+        color: #111827;
+      }
+      section, .toc-card, .org-banner {
+        background-color: #FFFFFF;
+        border: 1px solid #E5E7EB;
+        color: #111827;
+        break-inside: avoid;
+      }
+      p, li, td {
+        color: #374151;
+      }
+      th {
+        background-color: #F3F4F6;
+        color: #111827;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-badge">CNAT OFFICIAL RELEASE • VERSION 1.0.0</div>
+    <h1>CNAT Screen Recorder</h1>
+    <p class="subtitle">Complete Operation & Technical User Guide for Studio-Grade 4K UHD Screen Capture, Presenter Cam, Multi-Audio Mixing & Live Annotations.</p>
+  </header>
+
+  <div class="container">
+
+    <!-- Organization & Developer Credentials -->
+    <div class="org-banner">
+      <div class="org-item">
+        <div class="label">Organization</div>
+        <div class="value">Coder & AccoTax (CNAT)</div>
+      </div>
+      <div class="org-item">
+        <div class="label">Lead Developer</div>
+        <div class="value">Sukanta Hui</div>
+      </div>
+      <div class="org-item">
+        <div class="label">Official Website</div>
+        <div class="value"><a href="https://www.codernaccotax.co.in" target="_blank">www.codernaccotax.co.in</a></div>
+      </div>
+      <div class="org-item">
+        <div class="label">Support / WhatsApp</div>
+        <div class="value"><a href="tel:7003756860">+91 7003756860</a></div>
+      </div>
+    </div>
+
+    <!-- Table of Contents -->
+    <div class="toc-card">
+      <div class="toc-title">📋 Table of Contents</div>
+      <div class="toc-grid">
+        <a class="toc-link" href="#system-overview">1. System Overview & Architecture</a>
+        <a class="toc-link" href="#quick-start">2. Quick Start & Creator Defaults</a>
+        <a class="toc-link" href="#capture-modes">3. Screen Capture Modes & Presets</a>
+        <a class="toc-link" href="#audio-engine">4. Multi-Source Audio Engine</a>
+        <a class="toc-link" href="#noise-reduction">5. Real-Time AI Noise Reduction</a>
+        <a class="toc-link" href="#webcam-studio">6. Webcam Studio & Presenter Modes</a>
+        <a class="toc-link" href="#live-annotation">7. Live Screen Annotation Canvas</a>
+        <a class="toc-link" href="#hotkeys">8. Floating Toolbar & Hotkeys</a>
+        <a class="toc-link" href="#quality-profiles">9. Video Profiles & 4K Encoders</a>
+        <a class="toc-link" href="#post-processing">10. Player, Trimmer & Exporter</a>
+        <a class="toc-link" href="#troubleshooting">11. Diagnostics & FAQs</a>
+        <a class="toc-link" href="#contact-license">12. Contact, Support & License</a>
+      </div>
+    </div>
+
+    <!-- Section 1 -->
+    <section id="system-overview">
+      <h2>1. System Overview & Architecture</h2>
+      <p><b>CNAT Screen Recorder</b> is a high-performance desktop application engineered for seamless screen recording, tutorial creation, presentation streaming, and video production. Built with <b>Python 3.10+</b> and <b>PyQt6</b>, it leverages direct Windows APIs (DXGI / DirectShow / WASAPI) for near-zero latency capture.</p>
+      
+      <div class="feature-grid">
+        <div class="feature-box">
+          <h4>🎥 4K Ultra HD Engine</h4>
+          <p>Fluid 3840×2160 capture at 60/120 FPS with Lanczos hardware scaling and zero dropped frames.</p>
+        </div>
+        <div class="feature-box">
+          <h4>🎙️ Multi-Track Audio</h4>
+          <p>Simultaneous capture of WASAPI system sound, dedicated studio microphone, and webcam microphone.</p>
+        </div>
+        <div class="feature-box">
+          <h4>📷 Studio Presenter Suite</h4>
+          <p>Floating PiP bubbles, 5 framing shapes, 6 color filters, and full-screen presenter cam mode.</p>
+        </div>
+        <div class="feature-box">
+          <h4>⚡ Hardware GPU Accel</h4>
+          <p>Automatic detection of NVIDIA NVENC, Intel QuickSync (QSV), AMD AMF, and CPU libx264 fallback.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2 -->
+    <section id="quick-start">
+      <h2>2. Quick Start & Creator Defaults</h2>
+      <p>Upon launch, the application loads with the optimized <b>Creator Profile</b>:</p>
+      <ul>
+        <li><b>🔊 System Audio</b>: <code>Unchecked (Off)</code> by default to avoid accidental notification chimes.</li>
+        <li><b>🎙️ Microphone</b>: <code>Checked (On)</code> by default, automatically prioritizing dedicated USB mics (e.g. <b>JBL Commercial CSUM10</b>).</li>
+        <li><b>🔇 Noise Reduction</b>: <code>0% (Off)</code> by default.</li>
+        <li><b>📷 Webcam PiP</b>: <code>Checked (On)</code> by default, auto-detecting <b>Iriun Webcam</b> with <b>⭕ Circle Bubble</b> framing shape.</li>
+        <li><b>🎙️ Webcam Audio</b>: <code>Unchecked (Off)</code> by default to prevent room feedback.</li>
+        <li><b>🎯 Resolution & Quality</b>: <code>4K Ultra HD (3840x2160)</code> & <code>4K Ultra Master (60 Mbps)</code>.</li>
+      </ul>
+
+      <div class="alert-tip">
+        <b>💡 3-Step Recording Workflow:</b>
+        <ol style="margin-top: 6px; padding-left: 20px;">
+          <li>Select your capture mode (Full Screen or Social Media Preset).</li>
+          <li>Press <span class="hotkey-badge">F9</span> to begin after the 3-second visual countdown.</li>
+          <li>Press <span class="hotkey-badge">F9</span> again to finish and preview/trim your video instantly.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Section 3 -->
+    <section id="capture-modes">
+      <h2>3. Screen Capture Modes & Social Media Presets</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Preset</th>
+            <th>Aspect Ratio</th>
+            <th>Standard Sizes</th>
+            <th>Target Platform</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>📱 9:16 Reel</b></td>
+            <td><code>9:16</code></td>
+            <td>1080×1920, 720×1280</td>
+            <td>Instagram Reels, YouTube Shorts, TikTok</td>
+          </tr>
+          <tr>
+            <td><b>🎬 16:9 YouTube</b></td>
+            <td><code>16:9</code></td>
+            <td>3840×2160 (4K), 1920×1080</td>
+            <td>YouTube, Twitch, Facebook Videos</td>
+          </tr>
+          <tr>
+            <td><b>📷 1:1 Square</b></td>
+            <td><code>1:1</code></td>
+            <td>1080×1080, 720×720</td>
+            <td>Instagram Square Posts, Twitter Feeds</td>
+          </tr>
+          <tr>
+            <td><b>🖼️ 4:5 Portrait</b></td>
+            <td><code>4:5</code></td>
+            <td>1080×1350, 864×1080</td>
+            <td>Instagram Portrait Feed</td>
+          </tr>
+          <tr>
+            <td><b>📺 4:3 Classic</b></td>
+            <td><code>4:3</code></td>
+            <td>1440×1080, 1024×768</td>
+            <td>Presentations, iPad Displays</td>
+          </tr>
+          <tr>
+            <td><b>🎞️ 21:9 Cinema</b></td>
+            <td><code>21:9</code></td>
+            <td>2560×1080, 3440×1440</td>
+            <td>Ultrawide Monitors, Game Demos</td>
+          </tr>
+          <tr>
+            <td><b>🔓 Freeform</b></td>
+            <td>Flexible</td>
+            <td>Arbitrary Width & Height</td>
+            <td>Custom Application Selection</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Section 4 -->
+    <section id="audio-engine">
+      <h2>4. Multi-Source Audio Engine & Mixing</h2>
+      <p>CNAT Screen Recorder incorporates an advanced audio pipeline capable of recording multiple streams simultaneously with zero phase distortion:</p>
+      <ul>
+        <li><b>System Loopback (WASAPI)</b>: Captures internal system sounds, video calls, games, and web media cleanly.</li>
+        <li><b>Microphone Input</b>: Studio-grade vocal recording with auto-detection for USB hardware microphones.</li>
+        <li><b>Webcam Audio</b>: Direct capture from camera array microphones.</li>
+        <li><b>Live VU Meters</b>: Real-time graphical level meters for immediate visual monitoring.</li>
+      </ul>
+    </section>
+
+    <!-- Section 5 -->
+    <section id="noise-reduction">
+      <h2>5. Real-Time AI Noise Suppression</h2>
+      <p>The integrated noise suppression engine filters background noise in real time using frequency-domain spectral subtraction and downward dynamic gating:</p>
+      <ul>
+        <li><b>0% (Off)</b>: Pure studio bypass.</li>
+        <li><b>1% – 35% (Subtle)</b>: Removes subtle computer fan noise and electrical hum while preserving voice richness.</li>
+        <li><b>36% – 70% (Balanced)</b>: Eliminates room reverberation, air conditioner noise, and outside traffic.</li>
+        <li><b>71% – 100% (Aggressive)</b>: High-attenuation suppression for noisy shared environments.</li>
+      </ul>
+    </section>
+
+    <!-- Section 6 -->
+    <section id="webcam-studio">
+      <h2>6. Webcam Studio & Presenter Modes</h2>
+      <h3>Floating PiP Bubble</h3>
+      <ul>
+        <li><b>Resize on the fly</b>: Hover over the webcam and scroll your mouse wheel (100 px – 600 px).</li>
+        <li><b>Top Hover Pill</b>: Access instant controls (Flip 🔄, Shape 📐, Filter 🎨, Corner Dock 📌, Fullscreen ⛶).</li>
+      </ul>
+
+      <h3>Studio Framing Shapes</h3>
+      <p><b>⭕ Circle Bubble</b> • <b>🎬 16:9 Widescreen</b> • <b>🔲 Rounded Card</b> • <b>📱 9:16 Vertical Reel</b> • <b>⬛ Classic Square</b></p>
+
+      <h3>⛶ Fullscreen Presenter Cam (<span class="hotkey-badge">F4</span>)</h3>
+      <p>Instantly expand your camera across the entire recording viewport. Ideal for opening statements, introductions, or instructor demonstrations before returning to screen capture.</p>
+    </section>
+
+    <!-- Section 7 -->
+    <section id="live-annotation">
+      <h2>7. Live Screen Annotation Canvas (<span class="hotkey-badge">F8</span>)</h2>
+      <p>Press <span class="hotkey-badge">F8</span> anytime to open the drawing overlay without interrupting recording:</p>
+      <ul>
+        <li>✏️ <b>Pen & 🖍️ Neon Highlighter</b>: Freehand markup and semi-transparent text highlighting.</li>
+        <li>➡️ <b>Directional Arrows</b>: Auto-aligning pointer arrows.</li>
+        <li>🔲 <b>Bounding Boxes & Circles</b>: Call out specific interface elements.</li>
+        <li>🔢 <b>Numbered Step Badges</b>: Sequential badges (1, 2, 3) for software tutorials.</li>
+        <li>🔤 <b>Text Notes & Multi-Color Palette</b>: Crisp on-screen instructions.</li>
+      </ul>
+    </section>
+
+    <!-- Section 8 -->
+    <section id="hotkeys">
+      <h2>8. Floating Toolbar & Global Hotkey Reference</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Shortcut</th>
+            <th>Function</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="hotkey-badge">F9</span></td>
+            <td><b>Start / Stop Recording</b></td>
+            <td>Toggle primary recording session</td>
+          </tr>
+          <tr>
+            <td><span class="hotkey-badge">F10</span></td>
+            <td><b>Pause / Resume</b></td>
+            <td>Temporarily pause without splitting files</td>
+          </tr>
+          <tr>
+            <td><span class="hotkey-badge">F8</span></td>
+            <td><b>Annotation Overlay</b></td>
+            <td>Toggle live drawing tools</td>
+          </tr>
+          <tr>
+            <td><span class="hotkey-badge">F7</span></td>
+            <td><b>Toggle Webcam PiP</b></td>
+            <td>Show or hide floating camera overlay</td>
+          </tr>
+          <tr>
+            <td><span class="hotkey-badge">F4</span></td>
+            <td><b>Fullscreen Presenter Cam</b></td>
+            <td>Toggle full camera presenter mode</td>
+          </tr>
+          <tr>
+            <td><span class="hotkey-badge">F6</span></td>
+            <td><b>Mute / Unmute Mic</b></td>
+            <td>Instant microphone mute toggle</td>
+          </tr>
+          <tr>
+            <td><span class="hotkey-badge">F11</span></td>
+            <td><b>Instant Screenshot</b></td>
+            <td>Capture full-resolution PNG image</td>
+          </tr>
+          <tr>
+            <td><span class="hotkey-badge">Esc</span></td>
+            <td><b>Restore / Exit</b></td>
+            <td>Restore floating PiP or exit region mode</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Section 9 -->
+    <section id="quality-profiles">
+      <h2>9. Video Profiles & 4K Encoders</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Profile</th>
+            <th>Bitrate</th>
+            <th>CRF</th>
+            <th>Use Case</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>4K Ultra Master (60 Mbps)</b></td>
+            <td><code>60 Mbps</code></td>
+            <td><code>14</code></td>
+            <td>Ultra-sharp text, 4K UHD YouTube tutorials, Master archive</td>
+          </tr>
+          <tr>
+            <td><b>High Quality (20 Mbps)</b></td>
+            <td><code>20 Mbps</code></td>
+            <td><code>18</code></td>
+            <td>1080p / 1440p standard recordings, high motion</td>
+          </tr>
+          <tr>
+            <td><b>Medium Quality (8 Mbps)</b></td>
+            <td><code>8 Mbps</code></td>
+            <td><code>23</code></td>
+            <td>Presentations, meetings, balanced disk size</td>
+          </tr>
+          <tr>
+            <td><b>Low Size / Draft (3 Mbps)</b></td>
+            <td><code>3 Mbps</code></td>
+            <td><code>28</code></td>
+            <td>Quick sharing, lightweight preview clips</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Section 10 -->
+    <section id="post-processing">
+      <h2>10. Post-Recording Player, Trimmer & Exporter</h2>
+      <p>When you stop recording, the instant player dialog provides built-in media tools:</p>
+      <ul>
+        <li>🎬 <b>Timeline Scrubbing</b>: Frame-accurate seeking with volume control.</li>
+        <li>✂️ <b>Lossless Trimmer</b>: Cut unwanted intro/outro segments in seconds without re-encoding quality loss.</li>
+        <li>🎞️ <b>Animated GIF Generator</b>: Create lightweight GIFs for GitHub PRs and documentation.</li>
+        <li>🎵 <b>MP3 Extractor</b>: Export the audio track directly as an MP3 audio file.</li>
+      </ul>
+    </section>
+
+    <!-- Section 11 -->
+    <section id="troubleshooting">
+      <h2>11. Diagnostics & Frequently Asked Questions (FAQs)</h2>
+      <p><b>Q: Where are recordings saved?</b><br>
+      A: By default, in <code>C:\Users\&lt;Username&gt;\Videos\CNATRecordings\</code>. You can change this in the Settings (⚙️) dialog.</p>
+
+      <p><b>Q: How do I use my mobile phone as a 4K webcam?</b><br>
+      A: Install <b>Iriun Webcam</b> on both phone and PC. Ensure both devices are on the same Wi-Fi network (or connected via USB). CNAT Screen Recorder automatically selects Iriun Webcam.</p>
+    </section>
+
+    <!-- Section 12 -->
+    <section id="contact-license">
+      <h2>12. Contact, Support & License</h2>
+      <p><b>CNAT Screen Recorder</b> is designed, engineered, and maintained by <b>Coder & AccoTax (CNAT)</b>.</p>
+      <ul>
+        <li><b>Organization</b>: Coder & AccoTax (CNAT)</li>
+        <li><b>Lead Developer</b>: Sukanta Hui</li>
+        <li><b>Website</b>: <a href="https://www.codernaccotax.co.in" target="_blank">www.codernaccotax.co.in</a></li>
+        <li><b>Phone / Helpline</b>: <a href="tel:7003756860">+91 7003756860</a> / <code>7003756860</code></li>
+        <li><b>License</b>: MIT License. Free for personal, commercial, and educational use.</li>
+      </ul>
+    </section>
+
+  </div>
+
+  <footer>
+    <p>© 2026 <b>Coder & AccoTax (CNAT)</b>. All rights reserved. • Developed by <b>Sukanta Hui</b></p>
+    <p style="margin-top: 6px;"><a href="https://www.codernaccotax.co.in">www.codernaccotax.co.in</a> • Support: +91 7003756860</p>
+  </footer>
+
+</body>
+</html>

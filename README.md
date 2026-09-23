@@ -19,6 +19,18 @@
 
 ---
 
+## 📖 Official User Manual & Operating Guide
+
+Comprehensive, publication-quality documentation is available for all users:
+
+- 📘 **[Official Markdown User Manual (docs/USER_MANUAL.md)](docs/USER_MANUAL.md)**: Full operating guide with 4K recording profiles, audio configuration, studio PiP shapes, and hotkey cheat sheet.
+- 🌐 **[Styled Standalone HTML User Manual (docs/USER_MANUAL.html)](docs/USER_MANUAL.html)**: Interactive, responsive guide with dark mode styling and direct **"Print to PDF"** support (`Ctrl + P`).
+- 📄 **[Quick User Guide (USER_GUIDE.md)](USER_GUIDE.md)**: Repository quick reference.
+
+*(💡 You can also access, read, and export the manual directly inside the application by clicking the **📖 Manual** button in the top header or **📖 User Manual** in the footer!)*
+
+---
+
 ## ✨ Key Features
 
 - 🎥 **4K Ultra HD & 60/120 FPS Recording**: Capture at 3840×2160, 2560×1440, or 1080p with ultra-fast multithreaded H.264 / HEVC encoding and zero frame-drop.

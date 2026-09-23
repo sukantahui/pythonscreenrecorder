@@ -63,6 +63,7 @@ from src.ui.floating_bar import FloatingBar
 from src.ui.settings_dialog import SettingsDialog
 from src.ui.shortcuts_dialog import ShortcutsDialog
 from src.ui.about_dialog import AboutDialog
+from src.ui.manual_dialog import UserManualDialog
 from src.ui.preview_dialog import PreviewDialog
 from src.services.hotkey_service import hotkey_service
 from src.services.tray_service import TrayService
@@ -136,6 +137,12 @@ class MainWindow(QMainWindow):
         btn_folder.setProperty("class", "SmallBtn")
         btn_folder.clicked.connect(lambda: post_processor.open_folder(settings.get("output_dir", DEFAULT_OUTPUT_DIR)))
         header_layout.addWidget(btn_folder)
+
+        btn_manual = QPushButton("📖 Manual")
+        btn_manual.setProperty("class", "SmallBtn")
+        btn_manual.setToolTip("Open User Manual & Documentation Guide")
+        btn_manual.clicked.connect(self._open_manual)
+        header_layout.addWidget(btn_manual)
 
         btn_shortcuts = QPushButton("⌨️ Shortcuts")
         btn_shortcuts.setProperty("class", "SmallBtn")
@@ -436,6 +443,11 @@ class MainWindow(QMainWindow):
         lbl_footer.setStyleSheet("font-size: 11px; color: #9CA3AF;")
         footer_layout.addWidget(lbl_footer, 1)
         footer_layout.addStretch()
+
+        btn_footer_manual = QPushButton("📖 User Manual")
+        btn_footer_manual.setProperty("class", "SmallBtn")
+        btn_footer_manual.clicked.connect(self._open_manual)
+        footer_layout.addWidget(btn_footer_manual)
 
         btn_footer_about = QPushButton("ℹ️ About")
         btn_footer_about.setProperty("class", "SmallBtn")
@@ -769,6 +781,7 @@ class MainWindow(QMainWindow):
         self.tray_service.stop_requested.connect(controller.stop_recording)
         self.tray_service.open_folder_requested.connect(lambda: post_processor.open_folder(settings.get("output_dir")))
         self.tray_service.settings_requested.connect(self._open_settings)
+        self.tray_service.manual_requested.connect(self._open_manual)
         self.tray_service.about_requested.connect(self._open_about)
         self.tray_service.exit_requested.connect(QApplication.instance().quit)
 
@@ -1058,6 +1071,11 @@ class MainWindow(QMainWindow):
         settings.set("record_microphone", new_state)
         status_text = "Microphone Enabled" if new_state else "Microphone Muted"
         self.tray_service.show_notification(APP_NAME, f"🎙️ {status_text} (F6)")
+
+    def _open_manual(self):
+        """Open the interactive User Manual & Documentation Dialog."""
+        dlg = UserManualDialog(self)
+        dlg.exec()
 
     def _open_about(self):
         """Open the CNAT Credits & About Dialog."""

@@ -17,6 +17,7 @@ class TrayService(QObject):
     stop_requested = pyqtSignal()
     open_folder_requested = pyqtSignal()
     settings_requested = pyqtSignal()
+    manual_requested = pyqtSignal()
     about_requested = pyqtSignal()
     exit_requested = pyqtSignal()
 
@@ -94,6 +95,9 @@ class TrayService(QObject):
 
         action_settings = menu.addAction("Settings")
         action_settings.triggered.connect(self.settings_requested.emit)
+
+        action_manual = menu.addAction("📖 User Manual & Docs...")
+        action_manual.triggered.connect(self.manual_requested.emit)
 
         action_about = menu.addAction("About Coder & AccoTax (CNAT)...")
         action_about.triggered.connect(self.about_requested.emit)

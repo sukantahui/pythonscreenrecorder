@@ -113,6 +113,11 @@ class AboutDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(10)
 
+        btn_manual = QPushButton("📖 User Manual")
+        btn_manual.setToolTip("Open User Manual & Technical Documentation")
+        btn_manual.clicked.connect(self._open_manual)
+        btn_layout.addWidget(btn_manual)
+
         btn_shortcuts = QPushButton("⌨️ Shortcuts")
         btn_shortcuts.clicked.connect(self._open_shortcuts)
         btn_layout.addWidget(btn_shortcuts)
@@ -126,6 +131,11 @@ class AboutDialog(QDialog):
         btn_layout.addWidget(btn_close)
 
         layout.addLayout(btn_layout)
+
+    def _open_manual(self):
+        from src.ui.manual_dialog import UserManualDialog
+        dlg = UserManualDialog(self)
+        dlg.exec()
 
     def _open_shortcuts(self):
         from src.ui.shortcuts_dialog import ShortcutsDialog

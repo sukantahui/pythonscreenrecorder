@@ -53,9 +53,20 @@ def capture_ui():
     cam_pix.save("tests/test_output/webcam_pip_circle_hover_ui.png")
     print("[UI Test] Saved webcam circle hover screenshot.")
 
+    # 5. Test UserManualDialog
+    from src.ui.manual_dialog import UserManualDialog
+    manual_dlg = UserManualDialog()
+    manual_dlg.show()
+    app.processEvents()
+
+    manual_pix = manual_dlg.grab()
+    manual_pix.save("tests/test_output/manual_dialog_ui.png")
+    print("[UI Test] Saved user manual dialog screenshot.")
+
     win.close()
     bar.close()
     overlay.close()
+    manual_dlg.close()
 
 if __name__ == "__main__":
     capture_ui()
