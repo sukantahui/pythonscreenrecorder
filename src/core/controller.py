@@ -109,8 +109,8 @@ class RecordingController(QObject):
         )
 
         # Initialize Audio Capture Worker
-        rec_sys = settings.get("record_system_audio", True)
-        rec_mic = settings.get("record_microphone", False)
+        rec_sys = settings.get("record_system_audio", False)
+        rec_mic = settings.get("record_microphone", True)
         rec_webcam_audio = settings.get("record_webcam_audio", False)
 
         webcam_audio_id = settings.get("webcam_audio_device_id")

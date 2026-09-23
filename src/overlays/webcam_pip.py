@@ -59,9 +59,7 @@ class WebcamPiPOverlay(QWidget):
     ):
         super().__init__()
         self.device_id = device_id
-        if shape == "rect":
-            shape = "wide"
-        self.shape_type = shape if shape in WEBCAM_SHAPES else "wide"
+        self.shape_type = shape if shape in WEBCAM_SHAPES else "circle"
         self.pip_size = max(100, min(size, 600))
         self.is_mirrored = mirrored
         self.filter_type = filter_name if filter_name in WEBCAM_FILTERS else "normal"

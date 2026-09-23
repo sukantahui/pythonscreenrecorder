@@ -235,7 +235,7 @@ class MainWindow(QMainWindow):
         sys_layout = QVBoxLayout(self.card_sys)
         sys_layout.setContentsMargins(12, 12, 12, 12)
         self.chk_sys = QCheckBox("🔊 System Audio")
-        self.chk_sys.setChecked(settings.get("record_system_audio", True))
+        self.chk_sys.setChecked(settings.get("record_system_audio", False))
         self.chk_sys.toggled.connect(lambda c: settings.set("record_system_audio", c))
         sys_layout.addWidget(self.chk_sys)
 
@@ -253,7 +253,7 @@ class MainWindow(QMainWindow):
         mic_layout.setContentsMargins(12, 12, 12, 12)
         mic_layout.setSpacing(6)
         self.chk_mic = QCheckBox("🎙️ Microphone")
-        self.chk_mic.setChecked(settings.get("record_microphone", False))
+        self.chk_mic.setChecked(settings.get("record_microphone", True))
         self.chk_mic.toggled.connect(lambda c: settings.set("record_microphone", c))
         mic_layout.addWidget(self.chk_mic)
 
@@ -301,7 +301,7 @@ class MainWindow(QMainWindow):
 
         cam_top_row = QHBoxLayout()
         self.chk_cam = QCheckBox("📷 Webcam PiP")
-        self.chk_cam.setChecked(settings.get("webcam_enabled", False))
+        self.chk_cam.setChecked(settings.get("webcam_enabled", True))
         self.chk_cam.toggled.connect(self._on_webcam_toggled)
         cam_top_row.addWidget(self.chk_cam)
 
@@ -328,8 +328,14 @@ class MainWindow(QMainWindow):
         # Shape Dropdown
         self.combo_cam_shape = QComboBox()
         self.combo_cam_shape.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.combo_cam_shape.blockSignals(True)
         for s_key, s_info in WEBCAM_SHAPES.items():
             self.combo_cam_shape.addItem(f"{s_info['icon']} {s_info['name']}", s_key)
+        saved_shape = settings.get("webcam_shape", "circle")
+        shape_idx = self.combo_cam_shape.findData(saved_shape)
+        if shape_idx >= 0:
+            self.combo_cam_shape.setCurrentIndex(shape_idx)
+        self.combo_cam_shape.blockSignals(False)
         self.combo_cam_shape.currentIndexChanged.connect(self._on_camera_shape_changed)
         cam_layout.addWidget(self.combo_cam_shape)
 
@@ -601,7 +607,7 @@ class MainWindow(QMainWindow):
     def _create_webcam_overlay(self) -> WebcamPiPOverlay:
         """Create and configure a WebcamPiPOverlay instance with active settings and bindings."""
         dev_id = self.combo_cam_dev.currentData() if self.combo_cam_dev.count() > 0 else settings.get("webcam_device_id", 0)
-        shape = self.combo_cam_shape.currentData() or settings.get("webcam_shape", "wide")
+        shape = self.combo_cam_shape.currentData() or settings.get("webcam_shape", "circle")
         size = settings.get("webcam_size", 220)
         mirrored = settings.get("webcam_mirrored", True)
         filter_name = settings.get("webcam_filter", "normal")
@@ -1014,9 +1020,15 @@ class MainWindow(QMainWindow):
             hotkey_service.start(settings.get("hotkeys"))
             self._refresh_camera_list()
             self._refresh_audio_devices()
+            self.chk_sys.blockSignals(True)
+            self.chk_sys.setChecked(settings.get("record_system_audio", False))
+            self.chk_sys.blockSignals(False)
             self.chk_mic.blockSignals(True)
-            self.chk_mic.setChecked(settings.get("record_microphone", False))
+            self.chk_mic.setChecked(settings.get("record_microphone", True))
             self.chk_mic.blockSignals(False)
+            self.chk_cam.blockSignals(True)
+            self.chk_cam.setChecked(settings.get("webcam_enabled", True))
+            self.chk_cam.blockSignals(False)
             self.chk_cam_audio.blockSignals(True)
             self.chk_cam_audio.setChecked(settings.get("record_webcam_audio", False))
             self.chk_cam_audio.blockSignals(False)

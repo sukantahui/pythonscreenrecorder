@@ -161,8 +161,8 @@ COLOR_TEXT_SECONDARY = "#9CA3AF"
 
 # Webcam Studio Configuration Presets
 WEBCAM_SHAPES = {
-    "wide": {"name": "16:9 Widescreen", "icon": "🎬", "ratio": (16, 9), "desc": "Standard 16:9 widescreen presenter framing"},
     "circle": {"name": "Circle Bubble", "icon": "⭕", "ratio": (1, 1), "desc": "Classic circular floating presenter bubble"},
+    "wide": {"name": "16:9 Widescreen", "icon": "🎬", "ratio": (16, 9), "desc": "Standard 16:9 widescreen presenter framing"},
     "rounded": {"name": "Rounded Card", "icon": "🔲", "ratio": (1, 1), "desc": "Modern rounded square presentation card"},
     "portrait": {"name": "9:16 Vertical Reel", "icon": "📱", "ratio": (9, 16), "desc": "Mobile-ready vertical portrait framing"},
     "square": {"name": "Classic Square", "icon": "⬛", "ratio": (1, 1), "desc": "1:1 square framing"},

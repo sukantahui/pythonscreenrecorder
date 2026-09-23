@@ -394,7 +394,7 @@ class SettingsDialog(QDialog):
         self.combo_quality.setCurrentText(settings.get("quality_profile", DEFAULT_QUALITY))
         self.combo_format.setCurrentText(settings.get("format", FORMAT_MP4))
 
-        self.chk_sys_audio.setChecked(settings.get("record_system_audio", True))
+        self.chk_sys_audio.setChecked(settings.get("record_system_audio", False))
         self.slider_sys_vol.setValue(int(settings.get("system_audio_volume", 100)))
 
         self.chk_mic_audio.setChecked(settings.get("record_microphone", True))
@@ -425,9 +425,7 @@ class SettingsDialog(QDialog):
 
         # Load cameras
         self._refresh_camera_devices()
-        shape = settings.get("webcam_shape", "wide")
-        if shape == "rect":
-            shape = "wide"
+        shape = settings.get("webcam_shape", "circle")
         idx = self.combo_cam_shape.findData(shape)
         if idx >= 0:
             self.combo_cam_shape.setCurrentIndex(idx)
@@ -486,7 +484,7 @@ class SettingsDialog(QDialog):
         if self.combo_cam_dev.currentData() is not None:
             settings.set("webcam_device_id", self.combo_cam_dev.currentData())
             settings.set("webcam_device_name", self.combo_cam_dev.currentText())
-        settings.set("webcam_shape", self.combo_cam_shape.currentData() or "wide")
+        settings.set("webcam_shape", self.combo_cam_shape.currentData() or "circle")
         settings.set("webcam_filter", self.combo_cam_filter.currentData() or "normal")
         settings.set("webcam_border_color", self.combo_cam_border.currentData() or "indigo")
         settings.set("webcam_size", self.slider_cam_size.value())

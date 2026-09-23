@@ -32,7 +32,7 @@ class SettingsManager:
         "resolution": DEFAULT_RESOLUTION,
         "quality_profile": DEFAULT_QUALITY,
         "encoder": "auto",
-        "record_system_audio": True,
+        "record_system_audio": False,
         "system_audio_volume": 100,
         "record_microphone": True,
         "mic_device_id": None,
