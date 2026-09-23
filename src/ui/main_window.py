@@ -44,6 +44,7 @@ from src.config.constants import (
     DEFAULT_QUALITY,
     COLOR_ACCENT,
     COLOR_DANGER,
+    ASPECT_RATIO_PRESETS,
 )
 from src.config.settings_manager import settings
 from src.core.controller import controller
@@ -138,11 +139,15 @@ class MainWindow(QMainWindow):
 
         main_layout.addLayout(header_layout)
 
-        # 2. Capture Mode Selector
+        # 2. Capture Mode Selector & Aspect Ratio Presets
         mode_card = QFrame(self)
         mode_card.setProperty("class", "Card")
-        mode_layout = QHBoxLayout(mode_card)
-        mode_layout.setContentsMargins(12, 12, 12, 12)
+        mode_card_layout = QVBoxLayout(mode_card)
+        mode_card_layout.setContentsMargins(12, 12, 12, 12)
+        mode_card_layout.setSpacing(10)
+
+        # Mode Selection Toggle Buttons Row
+        mode_layout = QHBoxLayout()
         mode_layout.setSpacing(12)
 
         self.mode_group = QButtonGroup(self)
@@ -161,6 +166,39 @@ class MainWindow(QMainWindow):
         self.btn_mode_region.clicked.connect(lambda: self._set_mode(MODE_REGION))
         self.mode_group.addButton(self.btn_mode_region)
         mode_layout.addWidget(self.btn_mode_region)
+
+        mode_card_layout.addLayout(mode_layout)
+
+        # Aspect Ratio Presets Row for Social Media & Streaming
+        presets_row = QHBoxLayout()
+        presets_row.setSpacing(6)
+
+        lbl_presets = QLabel("Locked Ratio Presets:")
+        lbl_presets.setStyleSheet("color: #9CA3AF; font-size: 11px; font-weight: bold; margin-right: 4px;")
+        presets_row.addWidget(lbl_presets)
+
+        self.preset_chips: Dict[str, QPushButton] = {}
+        chip_defs = [
+            ("9:16", "📱 9:16 Reel", "Instagram Reels, YouTube Shorts, TikTok (9:16)"),
+            ("16:9", "🎬 16:9 YouTube", "YouTube & FB Landscape Video (16:9)"),
+            ("1:1", "📷 1:1 Square", "Instagram Square Post (1:1)"),
+            ("4:5", "🖼️ 4:5 Portrait", "Instagram Portrait Post (4:5)"),
+            ("4:3", "📺 4:3 Classic", "Facebook Post & Tablet (4:3)"),
+            ("21:9", "🎞️ 21:9 Cinema", "Ultrawide Cinematic (21:9)"),
+            ("freeform", "🔓 Freeform", "Unlocked Custom Region"),
+        ]
+
+        for key, text, tip in chip_defs:
+            btn = QPushButton(text)
+            btn.setProperty("class", "PresetChip")
+            btn.setCheckable(True)
+            btn.setToolTip(tip)
+            btn.clicked.connect(lambda checked, k=key: self._on_preset_chip_clicked(k))
+            self.preset_chips[key] = btn
+            presets_row.addWidget(btn)
+
+        presets_row.addStretch()
+        mode_card_layout.addLayout(presets_row)
 
         main_layout.addWidget(mode_card)
 
@@ -527,7 +565,7 @@ class MainWindow(QMainWindow):
 
         # Region Selector
         self.region_selector.region_selected.connect(self._on_region_selected)
-        self.region_selector.cancelled.connect(lambda: self._set_mode(MODE_FULLSCREEN))
+        self.region_selector.cancelled.connect(self._on_region_cancelled)
 
         # Floating Toolbar Signals
         self.floating_bar.pause_clicked.connect(controller.pause_recording)
@@ -559,13 +597,55 @@ class MainWindow(QMainWindow):
     def _set_mode(self, mode: str):
         self.selected_mode = mode
         if mode == MODE_REGION:
-            self.region_selector.show()
+            # Check if any preset chip is already active
+            active_key = None
+            for key, btn in self.preset_chips.items():
+                if btn.isChecked():
+                    active_key = key
+                    break
+            if active_key:
+                self.region_selector.open_with_ratio(active_key)
+            else:
+                self.region_selector.show()
+                self.region_selector.raise_()
+                self.region_selector.activateWindow()
         else:
             self.selected_region = None
+            for btn in self.preset_chips.values():
+                btn.blockSignals(True)
+                btn.setChecked(False)
+                btn.blockSignals(False)
+            self.lbl_status.setText("● Full Screen")
+
+    def _on_preset_chip_clicked(self, ratio_key: str):
+        """User clicked a preset aspect ratio chip."""
+        self.selected_mode = MODE_REGION
+        self.btn_mode_region.setChecked(True)
+
+        for key, btn in self.preset_chips.items():
+            btn.blockSignals(True)
+            btn.setChecked(key == ratio_key)
+            btn.blockSignals(False)
+
+        self.region_selector.open_with_ratio(ratio_key)
 
     def _on_region_selected(self, region: dict):
         self.selected_region = region
-        self.lbl_status.setText(f"● Region: {region['width']}x{region['height']}")
+        ratio_key = region.get("ratio_key", "freeform")
+        ratio_label = region.get("ratio_label", "")
+
+        for key, btn in self.preset_chips.items():
+            btn.blockSignals(True)
+            btn.setChecked(key == ratio_key)
+            btn.blockSignals(False)
+
+        suffix = f" ({ratio_label})" if ratio_label and ratio_label != "Custom" else ""
+        self.lbl_status.setText(f"● Region: {region['width']}x{region['height']}{suffix}")
+
+    def _on_region_cancelled(self):
+        if not self.selected_region:
+            self.btn_mode_full.setChecked(True)
+            self._set_mode(MODE_FULLSCREEN)
 
     def _toggle_recording(self):
         if controller.state == "idle":

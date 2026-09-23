@@ -216,3 +216,28 @@ QScrollBar::handle:vertical:hover {
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     height: 0;
 }
+
+/* Aspect Ratio Preset Chips */
+QPushButton.PresetChip {
+    background-color: #161820;
+    color: #9CA3AF;
+    border: 1px solid #2D313F;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+QPushButton.PresetChip:hover {
+    background-color: #20232E;
+    color: #F9FAFB;
+    border-color: #4F46E5;
+}
+
+QPushButton.PresetChip:checked {
+    background-color: #20232E;
+    color: #FFFFFF;
+    border: 1.5px solid #6366F1;
+    font-weight: bold;
+}
+

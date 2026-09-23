@@ -41,6 +41,73 @@ RESOLUTION_PRESETS = {
 }
 DEFAULT_RESOLUTION = "4K Ultra HD (3840x2160)"
 
+# Locked Aspect Ratio Presets for Social Media & Streaming
+ASPECT_RATIO_PRESETS = {
+    "freeform": {
+        "name": "Freeform (Unlocked)",
+        "label": "Freeform",
+        "icon": "🔓",
+        "ratio": None,
+        "desc": "Arbitrary selection",
+        "default_size": None,
+        "sizes": [],
+    },
+    "9:16": {
+        "name": "Reel / Shorts (9:16)",
+        "label": "9:16 Reel",
+        "icon": "📱",
+        "ratio": (9, 16),
+        "desc": "Instagram Reels, YouTube Shorts, TikTok, Stories",
+        "default_size": (1080, 1920),
+        "sizes": [(1080, 1920), (720, 1280), (540, 960)],
+    },
+    "16:9": {
+        "name": "YouTube / Landscape (16:9)",
+        "label": "16:9 YouTube",
+        "icon": "🎬",
+        "ratio": (16, 9),
+        "desc": "YouTube, Facebook Landscape, Twitch",
+        "default_size": (1920, 1080),
+        "sizes": [(1920, 1080), (1280, 720), (2560, 1440), (3840, 2160)],
+    },
+    "1:1": {
+        "name": "Instagram Post (1:1)",
+        "label": "1:1 Square",
+        "icon": "📷",
+        "ratio": (1, 1),
+        "desc": "Instagram Square Post, Facebook Feed",
+        "default_size": (1080, 1080),
+        "sizes": [(1080, 1080), (720, 720), (600, 600)],
+    },
+    "4:5": {
+        "name": "Instagram Portrait (4:5)",
+        "label": "4:5 Portrait",
+        "icon": "🖼️",
+        "ratio": (4, 5),
+        "desc": "Instagram Portrait Feed Post",
+        "default_size": (1080, 1350),
+        "sizes": [(1080, 1350), (864, 1080), (720, 900)],
+    },
+    "4:3": {
+        "name": "Facebook / Classic (4:3)",
+        "label": "4:3 Classic",
+        "icon": "📺",
+        "ratio": (4, 3),
+        "desc": "Classic TV, iPad / Tablets, FB Posts",
+        "default_size": (1440, 1080),
+        "sizes": [(1440, 1080), (1024, 768), (800, 600)],
+    },
+    "21:9": {
+        "name": "Ultrawide / Cinema (21:9)",
+        "label": "21:9 Cinema",
+        "icon": "🎞️",
+        "ratio": (21, 9),
+        "desc": "Ultrawide monitors, Cinematic widescreen",
+        "default_size": (2560, 1080),
+        "sizes": [(2560, 1080), (3440, 1440)],
+    },
+}
+
 # Video Codecs & Hardware Acceleration
 CODEC_H264_NVENC = "h264_nvenc"
 CODEC_H264_QSV = "h264_qsv"

@@ -57,7 +57,13 @@ class FFmpegWriter:
 
         preset = RESOLUTION_PRESETS.get(self.target_resolution)
         if preset and isinstance(preset, (tuple, list)):
-            return (preset[0], preset[1])
+            target_w, target_h = preset
+            # Guard against distorting aspect ratios (e.g. vertical 9:16 reel captured with 16:9 preset)
+            src_ar = self.width / max(1, self.height)
+            tgt_ar = target_w / max(1, target_h)
+            if abs(src_ar - tgt_ar) > 0.05:
+                return (self.width, self.height)
+            return (target_w, target_h)
 
         return (self.width, self.height)
 

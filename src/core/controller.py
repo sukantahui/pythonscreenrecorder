@@ -130,7 +130,7 @@ class RecordingController(QObject):
             quality_profile=quality,
             has_audio=has_audio,
             temp_audio_file=self.temp_audio_file if has_audio else None,
-            target_resolution=resolution,
+            target_resolution=resolution if region is None else None,
         )
 
         if not self.ffmpeg_writer.open():
