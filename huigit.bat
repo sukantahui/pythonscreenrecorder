@@ -58,22 +58,29 @@ echo [INFO] No changes detected. Working tree is clean.
 goto :check_push
 
 :do_commit
+echo.
+echo Changes staged for commit:
+git status --short
+echo.
+
 set "COMMIT_MSG=%*"
 if defined COMMIT_MSG (
     set "COMMIT_MSG=!COMMIT_MSG:"=!"
 )
 
+:ask_commit_msg
 if "!COMMIT_MSG!"=="" (
-    echo.
-    set /p "USER_INPUT=Enter commit message (Press Enter for default timestamp message): "
-    if not "!USER_INPUT!"=="" (
+    set "USER_INPUT="
+    set /p "USER_INPUT=Enter commit message: "
+    if defined USER_INPUT (
         set "COMMIT_MSG=!USER_INPUT!"
         set "COMMIT_MSG=!COMMIT_MSG:"=!"
     )
 )
 
 if "!COMMIT_MSG!"=="" (
-    set "COMMIT_MSG=Update: %DATE% %TIME%"
+    echo [ERROR] Commit message cannot be empty! Please enter a valid commit message.
+    goto :ask_commit_msg
 )
 
 echo [INFO] Committing with message: "!COMMIT_MSG!"
