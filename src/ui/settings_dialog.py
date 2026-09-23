@@ -25,10 +25,12 @@ from src.config.constants import (
     QUALITY_PROFILES,
     RESOLUTION_PRESETS,
     DEFAULT_RESOLUTION,
-    DEFAULT_QUALITY,
     FORMAT_MP4,
     FORMAT_MKV,
     FORMAT_WEBM,
+    WEBCAM_SHAPES,
+    WEBCAM_FILTERS,
+    WEBCAM_BORDER_THEMES,
 )
 from src.core.audio_capture import AudioCaptureWorker
 from src.core.camera_detect import camera_detector
@@ -280,10 +282,19 @@ class SettingsDialog(QDialog):
         cam_form.addRow("Camera Device:", cam_dev_row)
 
         self.combo_cam_shape = QComboBox()
-        self.combo_cam_shape.addItem("Circle PiP", "circle")
-        self.combo_cam_shape.addItem("Rounded Square PiP", "rounded")
-        self.combo_cam_shape.addItem("Square / Rect PiP", "rect")
+        for s_key, s_info in WEBCAM_SHAPES.items():
+            self.combo_cam_shape.addItem(f"{s_info['icon']} {s_info['name']}", s_key)
         cam_form.addRow("Default Shape:", self.combo_cam_shape)
+
+        self.combo_cam_filter = QComboBox()
+        for f_key, f_info in WEBCAM_FILTERS.items():
+            self.combo_cam_filter.addItem(f"{f_info['icon']} {f_info['name']}", f_key)
+        cam_form.addRow("Lighting / Filter:", self.combo_cam_filter)
+
+        self.combo_cam_border = QComboBox()
+        for b_key, b_info in WEBCAM_BORDER_THEMES.items():
+            self.combo_cam_border.addItem(b_info["name"], b_key)
+        cam_form.addRow("Border Theme:", self.combo_cam_border)
 
         # PiP Size Slider
         size_row = QHBoxLayout()
@@ -409,10 +420,22 @@ class SettingsDialog(QDialog):
 
         # Load cameras
         self._refresh_camera_devices()
-        shape = settings.get("webcam_shape", "circle")
+        shape = settings.get("webcam_shape", "wide")
+        if shape == "rect":
+            shape = "wide"
         idx = self.combo_cam_shape.findData(shape)
         if idx >= 0:
             self.combo_cam_shape.setCurrentIndex(idx)
+
+        filter_name = settings.get("webcam_filter", "normal")
+        f_idx = self.combo_cam_filter.findData(filter_name)
+        if f_idx >= 0:
+            self.combo_cam_filter.setCurrentIndex(f_idx)
+
+        border_theme = settings.get("webcam_border_color", "indigo")
+        b_idx = self.combo_cam_border.findData(border_theme)
+        if b_idx >= 0:
+            self.combo_cam_border.setCurrentIndex(b_idx)
 
         size = settings.get("webcam_size", 220)
         self.slider_cam_size.setValue(size)
@@ -457,7 +480,9 @@ class SettingsDialog(QDialog):
         if self.combo_cam_dev.currentData() is not None:
             settings.set("webcam_device_id", self.combo_cam_dev.currentData())
             settings.set("webcam_device_name", self.combo_cam_dev.currentText())
-        settings.set("webcam_shape", self.combo_cam_shape.currentData() or "circle")
+        settings.set("webcam_shape", self.combo_cam_shape.currentData() or "wide")
+        settings.set("webcam_filter", self.combo_cam_filter.currentData() or "normal")
+        settings.set("webcam_border_color", self.combo_cam_border.currentData() or "indigo")
         settings.set("webcam_size", self.slider_cam_size.value())
         settings.set("webcam_mirrored", self.chk_cam_mirror.isChecked())
 

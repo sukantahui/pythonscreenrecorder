@@ -157,3 +157,30 @@ COLOR_DANGER = "#EF4444"
 COLOR_SUCCESS = "#10B981"
 COLOR_TEXT_PRIMARY = "#F9FAFB"
 COLOR_TEXT_SECONDARY = "#9CA3AF"
+
+# Webcam Studio Configuration Presets
+WEBCAM_SHAPES = {
+    "wide": {"name": "16:9 Widescreen", "icon": "🎬", "ratio": (16, 9), "desc": "Standard 16:9 widescreen presenter framing"},
+    "circle": {"name": "Circle Bubble", "icon": "⭕", "ratio": (1, 1), "desc": "Classic circular floating presenter bubble"},
+    "rounded": {"name": "Rounded Card", "icon": "🔲", "ratio": (1, 1), "desc": "Modern rounded square presentation card"},
+    "portrait": {"name": "9:16 Vertical Reel", "icon": "📱", "ratio": (9, 16), "desc": "Mobile-ready vertical portrait framing"},
+    "square": {"name": "Classic Square", "icon": "⬛", "ratio": (1, 1), "desc": "1:1 square framing"},
+}
+
+WEBCAM_FILTERS = {
+    "normal": {"name": "Natural / Original", "icon": "🌿", "desc": "Pristine camera output without filters"},
+    "warm": {"name": "Studio Warm", "icon": "☀️", "desc": "Flattering golden amber skin-tone enhancement"},
+    "cool": {"name": "Crisp Cool", "icon": "❄️", "desc": "High-clarity modern tech presentation tone"},
+    "bright": {"name": "Brightness Boost", "icon": "💡", "desc": "Enhanced illumination and contrast for dim rooms"},
+    "bw": {"name": "Monochrome (B&W)", "icon": "🎞️", "desc": "Classic cinematic black and white"},
+    "beauty": {"name": "Soft Skin Smooth", "icon": "✨", "desc": "Subtle bilateral skin smoothing filter"},
+}
+
+WEBCAM_BORDER_THEMES = {
+    "indigo": {"name": "Cyber Indigo", "color": "#6366F1", "glow": "#818CF8"},
+    "cyan": {"name": "Neon Cyan", "color": "#00ADB5", "glow": "#00FFF5"},
+    "emerald": {"name": "Studio Emerald", "color": "#10B981", "glow": "#34D399"},
+    "sunset": {"name": "Sunset Orange", "color": "#F97316", "glow": "#FB923C"},
+    "none": {"name": "Borderless / Clean", "color": "transparent", "glow": "transparent"},
+}
+

@@ -1,45 +1,75 @@
 """
-Draggable & Resizable Webcam Picture-in-Picture (PiP) floating overlay.
-Supports mouse corner/edge drag resizing, mouse wheel resizing, live device switching,
-shapes (circle, rounded, rect), horizontal mirroring, and right-click context menu.
+Studio-Grade Draggable & Resizable Webcam Picture-in-Picture (PiP) Overlay.
+Supports Full HD 1080p capture, dynamic aspect-ratio framing (16:9 Widescreen,
+Circle Bubble, Rounded Card, 9:16 Vertical Reel, Classic Square), real-time studio
+lighting & color grading filters, 1-click corner docking, customizable border themes,
+on-hover quick-action pill toolbar, and smooth mouse wheel / edge resizing.
 """
 
 import sys
 import threading
 import time
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from PyQt6.QtCore import Qt, QRect, QPoint, QTimer, pyqtSignal
-from PyQt6.QtGui import QPainter, QColor, QPen, QBrush, QImage, QPainterPath, QFont, QAction, QCursor
+from PyQt6.QtGui import (
+    QPainter,
+    QColor,
+    QPen,
+    QBrush,
+    QImage,
+    QPainterPath,
+    QFont,
+    QAction,
+    QCursor,
+)
 from PyQt6.QtWidgets import QWidget, QApplication, QMenu
 import cv2
 import numpy as np
+
 from src.config.settings_manager import settings
+from src.config.constants import (
+    WEBCAM_SHAPES,
+    WEBCAM_FILTERS,
+    WEBCAM_BORDER_THEMES,
+)
 from src.core.camera_detect import camera_detector
 
 
 class WebcamPiPOverlay(QWidget):
-    """Floating draggable and resizable webcam preview overlay."""
+    """Studio-grade floating draggable and resizable webcam overlay."""
 
     device_changed = pyqtSignal(int)
     shape_changed = pyqtSignal(str)
     size_changed = pyqtSignal(int)
+    filter_changed = pyqtSignal(str)
+    border_changed = pyqtSignal(str)
     closed = pyqtSignal()
 
-    RESIZE_MARGIN = 18
+    RESIZE_MARGIN = 20
 
     def __init__(
         self,
         device_id: int = 0,
-        shape: str = "circle",
+        shape: str = "wide",
         size: int = 220,
-        mirrored: bool = True
+        mirrored: bool = True,
+        filter_name: str = "normal",
+        border_theme: str = "indigo",
     ):
         super().__init__()
         self.device_id = device_id
-        self.shape_type = shape  # "circle", "rounded", "rect"
+        # Normalize legacy shape names
+        if shape == "rect":
+            shape = "wide"
+        self.shape_type = shape if shape in WEBCAM_SHAPES else "wide"
         self.pip_size = max(100, min(size, 600))
         self.is_mirrored = mirrored
-        self.camera_name = "Camera"
+        self.filter_type = filter_name if filter_name in WEBCAM_FILTERS else "normal"
+        self.border_theme = border_theme if border_theme in WEBCAM_BORDER_THEMES else "indigo"
+
+        # Corner docking index for quick cycling
+        self._corners = ["bottom-right", "bottom-left", "top-right", "top-left"]
+        self._current_corner_idx = 0
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -47,8 +77,10 @@ class WebcamPiPOverlay(QWidget):
             | Qt.WindowType.SubWindow
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.setFixedSize(self.pip_size, self.pip_size)
         self.setMouseTracking(True)
+
+        w, h = self._get_pip_dimensions()
+        self.setFixedSize(w, h)
 
         self.current_qimage: Optional[QImage] = None
         self._running = False
@@ -65,12 +97,25 @@ class WebcamPiPOverlay(QWidget):
         self.resize_start_size = self.pip_size
         self._is_hovered = False
 
+        # Quick-action pill button bounding boxes
+        self._action_rects: Dict[str, QRect] = {}
+
         # Refresh timer for UI repaint (~30 FPS)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update)
 
+    def _get_pip_dimensions(self) -> Tuple[int, int]:
+        """Compute pixel width & height from shape aspect ratio and base size."""
+        base = self.pip_size
+        if self.shape_type == "wide":
+            return (int(base * 16 / 9), base)
+        elif self.shape_type == "portrait":
+            return (base, int(base * 16 / 9))
+        else:  # circle, rounded, square
+            return (base, base)
+
     def start_webcam(self, device_id: Optional[int] = None) -> bool:
-        """Initialize and start the camera stream."""
+        """Initialize and start the camera stream with Full HD 1080p resolution."""
         if device_id is not None:
             self.device_id = device_id
 
@@ -82,15 +127,55 @@ class WebcamPiPOverlay(QWidget):
             target=self._capture_worker,
             args=(self.device_id,),
             daemon=True,
-            name=f"WebcamCapture-{self.device_id}"
+            name=f"WebcamCapture-{self.device_id}",
         )
         self._capture_thread.start()
         self.timer.start(33)
         self.show()
         return True
 
+    def _apply_filter(self, frame: np.ndarray) -> np.ndarray:
+        """Apply real-time studio lighting & color grading filter."""
+        f_type = self.filter_type
+        if f_type == "normal" or frame is None:
+            return frame
+
+        try:
+            if f_type == "warm":
+                # Golden warm studio skin-tone enhancement
+                arr = frame.astype(np.float32)
+                arr[:, :, 2] = np.clip(arr[:, :, 2] * 1.12 + 10, 0, 255)  # Red boost
+                arr[:, :, 1] = np.clip(arr[:, :, 1] * 1.04, 0, 255)       # Green subtle
+                arr[:, :, 0] = np.clip(arr[:, :, 0] * 0.92, 0, 255)       # Blue soften
+                return arr.astype(np.uint8)
+
+            elif f_type == "cool":
+                # Crisp cool tech presentation tone
+                arr = frame.astype(np.float32)
+                arr[:, :, 0] = np.clip(arr[:, :, 0] * 1.15 + 10, 0, 255)  # Blue boost
+                arr[:, :, 2] = np.clip(arr[:, :, 2] * 0.92, 0, 255)       # Red soften
+                return arr.astype(np.uint8)
+
+            elif f_type == "bright":
+                # Brightness & contrast boost for dim rooms
+                return cv2.convertScaleAbs(frame, alpha=1.15, beta=25)
+
+            elif f_type == "bw":
+                # Classic cinematic monochrome
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+
+            elif f_type == "beauty":
+                # Gentle bilateral skin smoothing
+                return cv2.bilateralFilter(frame, d=7, sigmaColor=40, sigmaSpace=40)
+
+        except Exception as e:
+            print(f"[WebcamPiP] Filter {f_type} error: {e}")
+
+        return frame
+
     def _capture_worker(self, dev_id: int):
-        """Worker thread to capture frames from DirectShow/OpenCV."""
+        """Worker thread to capture frames from DirectShow/OpenCV in Full HD."""
         cap = None
         try:
             backend = cv2.CAP_DSHOW if sys.platform == "win32" else 0
@@ -102,6 +187,11 @@ class WebcamPiPOverlay(QWidget):
                 print(f"[WebcamPiP] Could not open camera device {dev_id}")
                 self._is_connecting = False
                 return
+
+            # Request 1080p Full HD resolution for razor-sharp clarity
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+            cap.set(cv2.CAP_PROP_FPS, 30)
 
             with self._thread_lock:
                 self._cap = cap
@@ -120,25 +210,41 @@ class WebcamPiPOverlay(QWidget):
                 if self.is_mirrored:
                     frame = cv2.flip(frame, 1)
 
-                # Center crop to square aspect ratio
+                # Apply active studio lighting/color filter
+                frame = self._apply_filter(frame)
+
+                # Target dimensions for the current shape
+                target_w, target_h = self._get_pip_dimensions()
+                target_aspect = target_w / max(1, target_h)
+
+                # Center crop to target aspect ratio
                 h, w, _ = frame.shape
-                min_dim = min(h, w)
-                start_x = (w - min_dim) // 2
-                start_y = (h - min_dim) // 2
-                cropped = frame[start_y : start_y + min_dim, start_x : start_x + min_dim]
+                current_aspect = w / max(1, h)
+
+                if current_aspect > target_aspect:
+                    crop_w = int(h * target_aspect)
+                    crop_h = h
+                    start_x = (w - crop_w) // 2
+                    start_y = 0
+                else:
+                    crop_w = w
+                    crop_h = int(w / target_aspect)
+                    start_x = 0
+                    start_y = (h - crop_h) // 2
+
+                cropped = frame[start_y : start_y + crop_h, start_x : start_x + crop_w]
 
                 # Pre-scale to PiP size on worker thread with fast OpenCV SIMD resize
-                target_size = self.pip_size
-                if min_dim != target_size:
-                    cropped = cv2.resize(cropped, (target_size, target_size), interpolation=cv2.INTER_LINEAR)
+                if crop_w != target_w or crop_h != target_h:
+                    cropped = cv2.resize(cropped, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
 
                 # Convert BGR to RGB
                 rgb_frame = cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB)
-                bytes_per_line = 3 * target_size
+                bytes_per_line = 3 * target_w
                 qimg = QImage(
                     rgb_frame.data,
-                    target_size,
-                    target_size,
+                    target_w,
+                    target_h,
                     bytes_per_line,
                     QImage.Format.Format_RGB888,
                 ).copy()
@@ -169,16 +275,39 @@ class WebcamPiPOverlay(QWidget):
         self.start_webcam(new_device_id)
 
     def set_shape(self, shape: str):
-        """Set PiP shape: circle, rounded, rect."""
+        """Set PiP shape: wide (16:9), circle, rounded, portrait (9:16), square."""
+        if shape == "rect":
+            shape = "wide"
+        if shape not in WEBCAM_SHAPES:
+            shape = "wide"
         self.shape_type = shape
+        w, h = self._get_pip_dimensions()
+        self.setFixedSize(w, h)
         settings.set("webcam_shape", shape)
         self.shape_changed.emit(shape)
         self.update()
 
+    def set_filter(self, filter_name: str):
+        """Set active studio lighting/color filter."""
+        if filter_name in WEBCAM_FILTERS:
+            self.filter_type = filter_name
+            settings.set("webcam_filter", filter_name)
+            self.filter_changed.emit(filter_name)
+            self.update()
+
+    def set_border_theme(self, theme_name: str):
+        """Set active border color theme."""
+        if theme_name in WEBCAM_BORDER_THEMES:
+            self.border_theme = theme_name
+            settings.set("webcam_border_color", theme_name)
+            self.border_changed.emit(theme_name)
+            self.update()
+
     def set_size(self, size: int):
         """Resize the PiP overlay smoothly."""
         self.pip_size = max(100, min(size, 600))
-        self.setFixedSize(self.pip_size, self.pip_size)
+        w, h = self._get_pip_dimensions()
+        self.setFixedSize(w, h)
         settings.set("webcam_size", self.pip_size)
         self.size_changed.emit(self.pip_size)
         self.update()
@@ -188,6 +317,57 @@ class WebcamPiPOverlay(QWidget):
         self.is_mirrored = mirrored
         settings.set("webcam_mirrored", mirrored)
         self.update()
+
+    def snap_to_corner(self, corner: str = "bottom-right"):
+        """1-Click dock the PiP to any screen corner."""
+        screen = QApplication.primaryScreen()
+        if not screen:
+            return
+        geo = screen.availableGeometry()
+        w, h = self.width(), self.height()
+        margin_x, margin_y = 24, 24
+
+        if corner == "bottom-right":
+            x = geo.right() - w - margin_x
+            y = geo.bottom() - h - margin_y
+        elif corner == "bottom-left":
+            x = geo.left() + margin_x
+            y = geo.bottom() - h - margin_y
+        elif corner == "top-right":
+            x = geo.right() - w - margin_x
+            y = geo.top() + margin_y
+        elif corner == "top-left":
+            x = geo.left() + margin_x
+            y = geo.top() + margin_y
+        else:
+            return
+
+        self.move(max(geo.left(), x), max(geo.top(), y))
+
+    def cycle_shape(self):
+        """Cycle through available PiP shapes."""
+        shape_keys = list(WEBCAM_SHAPES.keys())
+        try:
+            curr_idx = shape_keys.index(self.shape_type)
+            next_shape = shape_keys[(curr_idx + 1) % len(shape_keys)]
+        except ValueError:
+            next_shape = "wide"
+        self.set_shape(next_shape)
+
+    def cycle_filter(self):
+        """Cycle through studio lighting & color filters."""
+        filter_keys = list(WEBCAM_FILTERS.keys())
+        try:
+            curr_idx = filter_keys.index(self.filter_type)
+            next_filter = filter_keys[(curr_idx + 1) % len(filter_keys)]
+        except ValueError:
+            next_filter = "normal"
+        self.set_filter(next_filter)
+
+    def cycle_corner(self):
+        """Cycle docking position across screen corners."""
+        self._current_corner_idx = (self._current_corner_idx + 1) % len(self._corners)
+        self.snap_to_corner(self._corners[self._current_corner_idx])
 
     def stop_stream(self):
         """Stop background capture stream."""
@@ -220,14 +400,12 @@ class WebcamPiPOverlay(QWidget):
         if x >= w - self.RESIZE_MARGIN and y >= h - self.RESIZE_MARGIN:
             return True
 
-        # Outer edge ring (for circle / rounded shapes)
         if self.shape_type == "circle":
             center_x, center_y = w / 2.0, h / 2.0
             radius = min(w, h) / 2.0
             dist = ((x - center_x) ** 2 + (y - center_y) ** 2) ** 0.5
             return radius - self.RESIZE_MARGIN <= dist <= radius + 4
 
-        # For square/rect, bottom or right edges
         return (x >= w - self.RESIZE_MARGIN) or (y >= h - self.RESIZE_MARGIN)
 
     def enterEvent(self, event):
@@ -240,19 +418,38 @@ class WebcamPiPOverlay(QWidget):
         self.update()
 
     def mousePressEvent(self, event):
+        pos = event.position().toPoint()
+        global_pos = event.globalPosition().toPoint()
+
         if event.button() == Qt.MouseButton.LeftButton:
-            pos = event.position().toPoint()
+            # Check if clicked inside hover quick-action pill buttons
+            if self._is_hovered:
+                for action, rect in self._action_rects.items():
+                    if rect.contains(pos):
+                        if action == "shape":
+                            self.cycle_shape()
+                        elif action == "filter":
+                            self.cycle_filter()
+                        elif action == "mirror":
+                            self.set_mirrored(not self.is_mirrored)
+                        elif action == "snap":
+                            self.cycle_corner()
+                        elif action == "close":
+                            self.stop()
+                        return
+
             if self._is_in_resize_zone(pos):
                 self.is_resizing = True
                 self.is_dragging = False
-                self.resize_start_pos = event.globalPosition().toPoint()
+                self.resize_start_pos = global_pos
                 self.resize_start_size = self.pip_size
             else:
                 self.is_dragging = True
                 self.is_resizing = False
-                self.drag_start = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                self.drag_start = global_pos - self.frameGeometry().topLeft()
+
         elif event.button() == Qt.MouseButton.RightButton:
-            self._show_context_menu(event.globalPosition().toPoint())
+            self._show_context_menu(global_pos)
 
     def mouseMoveEvent(self, event):
         pos = event.position().toPoint()
@@ -269,8 +466,11 @@ class WebcamPiPOverlay(QWidget):
             self.move(global_pos - self.drag_start)
             self.setCursor(Qt.CursorShape.SizeAllCursor)
         else:
-            # Update hover cursor
-            if self._is_in_resize_zone(pos):
+            # Check hover over quick-action buttons
+            in_action_btn = any(rect.contains(pos) for rect in self._action_rects.values()) if self._is_hovered else False
+            if in_action_btn:
+                self.setCursor(Qt.CursorShape.PointingHandCursor)
+            elif self._is_in_resize_zone(pos):
                 self.setCursor(Qt.CursorShape.SizeFDiagCursor)
             else:
                 self.setCursor(Qt.CursorShape.ArrowCursor)
@@ -290,7 +490,7 @@ class WebcamPiPOverlay(QWidget):
             self.set_size(self.pip_size - 16)
 
     def _show_context_menu(self, global_pos: QPoint):
-        """Context menu for camera switching, shape, size presets, mirror."""
+        """Context menu for camera, shapes, filters, border themes, docking, sizing."""
         menu = QMenu(self)
         menu.setStyleSheet("""
             QMenu {
@@ -310,7 +510,7 @@ class WebcamPiPOverlay(QWidget):
             }
         """)
 
-        # Camera selector submenu
+        # 1. Camera selector submenu
         cam_menu = menu.addMenu("📷 Select Camera")
         cameras = camera_detector.get_available_cameras()
         for cam in cameras:
@@ -320,23 +520,56 @@ class WebcamPiPOverlay(QWidget):
             cid = cam["id"]
             action.triggered.connect(lambda checked, d_id=cid: self.switch_device(d_id))
 
-        # Shape submenu
-        shape_menu = menu.addMenu("🔲 PiP Shape")
-        for shp, lbl in [("circle", "Circle"), ("rounded", "Rounded Square"), ("rect", "Square")]:
-            act = shape_menu.addAction(lbl)
+        # 2. Shape submenu
+        shape_menu = menu.addMenu("🔲 Framing & Shape")
+        for shp, info in WEBCAM_SHAPES.items():
+            act = shape_menu.addAction(f"{info['icon']} {info['name']}")
             act.setCheckable(True)
             act.setChecked(self.shape_type == shp)
             act.triggered.connect(lambda checked, s=shp: self.set_shape(s))
 
-        # Size submenu
-        size_menu = menu.addMenu("📏 PiP Size Presets")
-        for sz, lbl in [(140, "Compact (140px)"), (220, "Medium (220px)"), (300, "Large (300px)"), (400, "Extra Large (400px)"), (500, "Jumbo (500px)")]:
+        # 3. Lighting & Filters submenu
+        filter_menu = menu.addMenu("☀️ Studio Lighting & Filters")
+        for f_key, info in WEBCAM_FILTERS.items():
+            act = filter_menu.addAction(f"{info['icon']} {info['name']}")
+            act.setCheckable(True)
+            act.setChecked(self.filter_type == f_key)
+            act.triggered.connect(lambda checked, f=f_key: self.set_filter(f))
+
+        # 4. Border Theme submenu
+        border_menu = menu.addMenu("🎨 Border Theme")
+        for b_key, info in WEBCAM_BORDER_THEMES.items():
+            act = border_menu.addAction(info["name"])
+            act.setCheckable(True)
+            act.setChecked(self.border_theme == b_key)
+            act.triggered.connect(lambda checked, b=b_key: self.set_border_theme(b))
+
+        # 5. Snap to Corner submenu
+        dock_menu = menu.addMenu("📍 Dock to Corner")
+        for c_key, c_name in [
+            ("bottom-right", "↘️ Bottom-Right (Default)"),
+            ("bottom-left", "↙️ Bottom-Left"),
+            ("top-right", "↗️ Top-Right"),
+            ("top-left", "↖️ Top-Left"),
+        ]:
+            act = dock_menu.addAction(c_name)
+            act.triggered.connect(lambda checked, c=c_key: self.snap_to_corner(c))
+
+        # 6. Size presets submenu
+        size_menu = menu.addMenu("📏 Size Presets")
+        for sz, lbl in [
+            (140, "Compact (140px)"),
+            (220, "Medium (220px)"),
+            (300, "Large (300px)"),
+            (400, "Extra Large (400px)"),
+            (500, "Jumbo (500px)"),
+        ]:
             act = size_menu.addAction(lbl)
             act.setCheckable(True)
             act.setChecked(abs(self.pip_size - sz) < 25)
             act.triggered.connect(lambda checked, s=sz: self.set_size(s))
 
-        # Mirror toggle
+        # 7. Mirror toggle
         act_mirror = menu.addAction("🪞 Flip Horizontally (Mirror)")
         act_mirror.setCheckable(True)
         act_mirror.setChecked(self.is_mirrored)
@@ -354,49 +587,101 @@ class WebcamPiPOverlay(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 
+        w, h = self.width(), self.height()
         rect = self.rect()
         path = QPainterPath()
 
         if self.shape_type == "circle":
-            path.addEllipse(0, 0, self.pip_size, self.pip_size)
+            path.addEllipse(0, 0, w, h)
         elif self.shape_type == "rounded":
-            path.addRoundedRect(0, 0, self.pip_size, self.pip_size, 26, 26)
-        else:
-            path.addRoundedRect(0, 0, self.pip_size, self.pip_size, 8, 8)
+            path.addRoundedRect(0, 0, w, h, 26, 26)
+        elif self.shape_type == "wide":
+            path.addRoundedRect(0, 0, w, h, 14, 14)
+        elif self.shape_type == "portrait":
+            path.addRoundedRect(0, 0, w, h, 16, 16)
+        else:  # square
+            path.addRoundedRect(0, 0, w, h, 10, 10)
 
+        # 1. Paint Camera Image clipped to shape
         painter.setClipPath(path)
-
         if self.current_qimage and not self._is_connecting:
             painter.drawImage(rect, self.current_qimage)
         else:
-            # Placeholder / connecting card
             painter.fillRect(rect, QColor("#161820"))
             painter.setPen(QColor("#9CA3AF"))
             painter.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-            msg = "Connecting Cam..." if self._is_connecting else "No Signal"
+            msg = "Connecting 1080p Cam..." if self._is_connecting else "No Signal"
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, f"📷\n{msg}")
 
-        # Draw glowing outline border
         painter.setClipping(False)
-        border_color = QColor("#818CF8") if self._is_hovered else QColor("#6366F1")
-        border_pen = QPen(border_color, 3)
-        painter.setPen(border_pen)
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        if self.shape_type == "circle":
-            painter.drawEllipse(2, 2, self.pip_size - 4, self.pip_size - 4)
-        elif self.shape_type == "rounded":
-            painter.drawRoundedRect(2, 2, self.pip_size - 4, self.pip_size - 4, 26, 26)
-        else:
-            painter.drawRoundedRect(2, 2, self.pip_size - 4, self.pip_size - 4, 8, 8)
 
-        # Draw interactive resize grip indicator in bottom-right corner when hovered
+        # 2. Draw Theme Border / Glowing Ring
+        theme_info = WEBCAM_BORDER_THEMES.get(self.border_theme, WEBCAM_BORDER_THEMES["indigo"])
+        color_str = theme_info["glow"] if self._is_hovered else theme_info["color"]
+
+        if color_str != "transparent":
+            border_color = QColor(color_str)
+            border_pen = QPen(border_color, 3)
+            painter.setPen(border_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+
+            if self.shape_type == "circle":
+                painter.drawEllipse(2, 2, w - 4, h - 4)
+            elif self.shape_type == "rounded":
+                painter.drawRoundedRect(2, 2, w - 4, h - 4, 26, 26)
+            elif self.shape_type == "wide":
+                painter.drawRoundedRect(2, 2, w - 4, h - 4, 14, 14)
+            elif self.shape_type == "portrait":
+                painter.drawRoundedRect(2, 2, w - 4, h - 4, 16, 16)
+            else:
+                painter.drawRoundedRect(2, 2, w - 4, h - 4, 10, 10)
+
+        # 3. Draw Hover Controls: Quick-Action Pill Toolbar + Resize Grip
         if self._is_hovered:
-            painter.setBrush(QBrush(QColor("#818CF8")))
+            # Subtle resize grip in bottom-right corner
+            painter.setBrush(QBrush(QColor(theme_info.get("glow", "#818CF8"))))
             painter.setPen(Qt.PenStyle.NoPen)
-            br_x = self.pip_size - 18
-            br_y = self.pip_size - 18
-
-            # Small 3-dot diagonal grip
+            br_x = w - 18
+            br_y = h - 18
             painter.drawEllipse(br_x + 8, br_y + 8, 3, 3)
             painter.drawEllipse(br_x + 8, br_y + 2, 3, 3)
             painter.drawEllipse(br_x + 2, br_y + 8, 3, 3)
+
+            # Frosted Action Pill Toolbar at top center
+            pill_w = 175
+            pill_h = 28
+            pill_x = (w - pill_w) // 2
+            pill_y = 8
+
+            pill_rect = QRect(pill_x, pill_y, pill_w, pill_h)
+            painter.setBrush(QBrush(QColor(16, 18, 24, 230)))
+            painter.setPen(QPen(QColor(63, 68, 88, 220), 1))
+            painter.drawRoundedRect(pill_rect, 14, 14)
+
+            # Draw action buttons inside pill
+            btn_w = 32
+            actions = [
+                ("shape", "🔲", "Cycle Shape"),
+                ("filter", "☀️", "Cycle Filter"),
+                ("mirror", "🪞", "Flip Mirror"),
+                ("snap", "📍", "Dock Corner"),
+                ("close", "✕", "Close"),
+            ]
+
+            painter.setFont(QFont("Segoe UI Emoji", 10))
+            self._action_rects.clear()
+
+            for i, (act_key, icon, _) in enumerate(actions):
+                btn_x = pill_x + 8 + (i * btn_w)
+                btn_rect = QRect(btn_x, pill_y + 2, btn_w, pill_h - 4)
+                self._action_rects[act_key] = btn_rect
+
+                # Check if mouse currently hovers over this specific action button
+                mouse_p = self.mapFromGlobal(QCursor.pos())
+                if btn_rect.contains(mouse_p):
+                    painter.setBrush(QBrush(QColor(99, 102, 241, 180)))
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.drawRoundedRect(btn_rect, 6, 6)
+
+                painter.setPen(QColor("#F9FAFB"))
+                painter.drawText(btn_rect, Qt.AlignmentFlag.AlignCenter, icon)

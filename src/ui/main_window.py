@@ -47,6 +47,7 @@ from src.config.constants import (
     COLOR_ACCENT,
     COLOR_DANGER,
     ASPECT_RATIO_PRESETS,
+    WEBCAM_SHAPES,
 )
 from src.config.settings_manager import settings
 from src.core.controller import controller
@@ -315,9 +316,9 @@ class MainWindow(QMainWindow):
 
         # Shape Dropdown
         self.combo_cam_shape = QComboBox()
-        self.combo_cam_shape.addItem("Circle PiP", "circle")
-        self.combo_cam_shape.addItem("Rounded PiP", "rounded")
-        self.combo_cam_shape.addItem("Rect PiP", "rect")
+        self.combo_cam_shape.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        for s_key, s_info in WEBCAM_SHAPES.items():
+            self.combo_cam_shape.addItem(f"{s_info['icon']} {s_info['name']}", s_key)
         self.combo_cam_shape.currentIndexChanged.connect(self._on_camera_shape_changed)
         cam_layout.addWidget(self.combo_cam_shape)
 
@@ -567,6 +568,19 @@ class MainWindow(QMainWindow):
             self.webcam_overlay.stop()
             self.webcam_overlay = None
 
+    def _sync_webcam_shape_ui(self, shape: str):
+        """Synchronize UI dropdown when webcam shape changes via context menu or hover pill."""
+        idx = self.combo_cam_shape.findData(shape)
+        if idx >= 0:
+            self.combo_cam_shape.blockSignals(True)
+            self.combo_cam_shape.setCurrentIndex(idx)
+            self.combo_cam_shape.blockSignals(False)
+
+    def _on_webcam_overlay_closed(self):
+        """Handle webcam overlay closed event."""
+        self._previewing_cam = False
+        self.btn_preview_cam.setText("👁️ Preview")
+
     def _toggle_webcam_preview(self):
         """Toggle live on-screen webcam preview."""
         if self.webcam_overlay and self.webcam_overlay.isVisible():
@@ -576,16 +590,22 @@ class MainWindow(QMainWindow):
             self.btn_preview_cam.setText("👁️ Preview")
         else:
             dev_id = self.combo_cam_dev.currentData() if self.combo_cam_dev.count() > 0 else 0
-            shape = self.combo_cam_shape.currentData() or "circle"
+            shape = self.combo_cam_shape.currentData() or "wide"
             size = settings.get("webcam_size", 220)
             mirrored = settings.get("webcam_mirrored", True)
+            filter_name = settings.get("webcam_filter", "normal")
+            border_theme = settings.get("webcam_border_color", "indigo")
 
             self.webcam_overlay = WebcamPiPOverlay(
                 device_id=dev_id,
                 shape=shape,
                 size=size,
-                mirrored=mirrored
+                mirrored=mirrored,
+                filter_name=filter_name,
+                border_theme=border_theme,
             )
+            self.webcam_overlay.shape_changed.connect(self._sync_webcam_shape_ui)
+            self.webcam_overlay.closed.connect(self._on_webcam_overlay_closed)
             self.webcam_overlay.start_webcam()
             self._previewing_cam = True
             self.btn_preview_cam.setText("❌ Close Cam")
@@ -597,16 +617,22 @@ class MainWindow(QMainWindow):
             self.webcam_overlay = None
         else:
             dev_id = settings.get("webcam_device_id", 0)
-            shape = settings.get("webcam_shape", "circle")
+            shape = settings.get("webcam_shape", "wide")
             size = settings.get("webcam_size", 220)
             mirrored = settings.get("webcam_mirrored", True)
+            filter_name = settings.get("webcam_filter", "normal")
+            border_theme = settings.get("webcam_border_color", "indigo")
 
             self.webcam_overlay = WebcamPiPOverlay(
                 device_id=dev_id,
                 shape=shape,
                 size=size,
-                mirrored=mirrored
+                mirrored=mirrored,
+                filter_name=filter_name,
+                border_theme=border_theme,
             )
+            self.webcam_overlay.shape_changed.connect(self._sync_webcam_shape_ui)
+            self.webcam_overlay.closed.connect(self._on_webcam_overlay_closed)
             self.webcam_overlay.start_webcam()
 
     def _connect_signals(self):
@@ -746,16 +772,22 @@ class MainWindow(QMainWindow):
         if self.chk_cam.isChecked():
             if not self.webcam_overlay or not self.webcam_overlay.isVisible():
                 dev_id = self.combo_cam_dev.currentData() if self.combo_cam_dev.count() > 0 else 0
-                shape = self.combo_cam_shape.currentData() or "circle"
+                shape = self.combo_cam_shape.currentData() or "wide"
                 size = settings.get("webcam_size", 220)
                 mirrored = settings.get("webcam_mirrored", True)
+                filter_name = settings.get("webcam_filter", "normal")
+                border_theme = settings.get("webcam_border_color", "indigo")
 
                 self.webcam_overlay = WebcamPiPOverlay(
                     device_id=dev_id,
                     shape=shape,
                     size=size,
-                    mirrored=mirrored
+                    mirrored=mirrored,
+                    filter_name=filter_name,
+                    border_theme=border_theme,
                 )
+                self.webcam_overlay.shape_changed.connect(self._sync_webcam_shape_ui)
+                self.webcam_overlay.closed.connect(self._on_webcam_overlay_closed)
                 self.webcam_overlay.start_webcam()
 
         # Start controller
